@@ -1,0 +1,131 @@
+public final class io/github/multiweb/api/DefaultNavigationPolicy : io/github/multiweb/api/NavigationPolicy {
+	public static final field INSTANCE Lio/github/multiweb/api/DefaultNavigationPolicy;
+	public fun decide (Lio/github/multiweb/api/NavigationRequest;)Lio/github/multiweb/api/NavigationDecision;
+}
+
+public final class io/github/multiweb/api/NavigationDecision : java/lang/Enum {
+	public static final field Allow Lio/github/multiweb/api/NavigationDecision;
+	public static final field Cancel Lio/github/multiweb/api/NavigationDecision;
+	public static final field OpenExternally Lio/github/multiweb/api/NavigationDecision;
+	public static fun getEntries ()Lkotlin/enums/EnumEntries;
+	public static fun valueOf (Ljava/lang/String;)Lio/github/multiweb/api/NavigationDecision;
+	public static fun values ()[Lio/github/multiweb/api/NavigationDecision;
+}
+
+public abstract interface class io/github/multiweb/api/NavigationPolicy {
+	public abstract fun decide (Lio/github/multiweb/api/NavigationRequest;)Lio/github/multiweb/api/NavigationDecision;
+}
+
+public final class io/github/multiweb/api/NavigationRequest {
+	public fun <init> (Ljava/lang/String;ZZ)V
+	public final fun component1 ()Ljava/lang/String;
+	public final fun component2 ()Z
+	public final fun component3 ()Z
+	public final fun copy (Ljava/lang/String;ZZ)Lio/github/multiweb/api/NavigationRequest;
+	public static synthetic fun copy$default (Lio/github/multiweb/api/NavigationRequest;Ljava/lang/String;ZZILjava/lang/Object;)Lio/github/multiweb/api/NavigationRequest;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getUrl ()Ljava/lang/String;
+	public fun hashCode ()I
+	public final fun isMainFrame ()Z
+	public final fun isUserInitiated ()Z
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class io/github/multiweb/api/WebError {
+	public fun <init> (Lio/github/multiweb/api/WebErrorCategory;Ljava/lang/String;Ljava/lang/String;)V
+	public synthetic fun <init> (Lio/github/multiweb/api/WebErrorCategory;Ljava/lang/String;Ljava/lang/String;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public final fun component1 ()Lio/github/multiweb/api/WebErrorCategory;
+	public final fun component2 ()Ljava/lang/String;
+	public final fun component3 ()Ljava/lang/String;
+	public final fun copy (Lio/github/multiweb/api/WebErrorCategory;Ljava/lang/String;Ljava/lang/String;)Lio/github/multiweb/api/WebError;
+	public static synthetic fun copy$default (Lio/github/multiweb/api/WebError;Lio/github/multiweb/api/WebErrorCategory;Ljava/lang/String;Ljava/lang/String;ILjava/lang/Object;)Lio/github/multiweb/api/WebError;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getCategory ()Lio/github/multiweb/api/WebErrorCategory;
+	public final fun getDescription ()Ljava/lang/String;
+	public final fun getFailingUrl ()Ljava/lang/String;
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class io/github/multiweb/api/WebErrorCategory : java/lang/Enum {
+	public static final field Navigation Lio/github/multiweb/api/WebErrorCategory;
+	public static final field Network Lio/github/multiweb/api/WebErrorCategory;
+	public static final field RenderProcess Lio/github/multiweb/api/WebErrorCategory;
+	public static final field Ssl Lio/github/multiweb/api/WebErrorCategory;
+	public static final field Unknown Lio/github/multiweb/api/WebErrorCategory;
+	public static fun getEntries ()Lkotlin/enums/EnumEntries;
+	public static fun valueOf (Ljava/lang/String;)Lio/github/multiweb/api/WebErrorCategory;
+	public static fun values ()[Lio/github/multiweb/api/WebErrorCategory;
+}
+
+public final class io/github/multiweb/api/WebRequest {
+	public fun <init> (Ljava/lang/String;Ljava/util/Map;)V
+	public synthetic fun <init> (Ljava/lang/String;Ljava/util/Map;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public final fun component1 ()Ljava/lang/String;
+	public final fun component2 ()Ljava/util/Map;
+	public final fun copy (Ljava/lang/String;Ljava/util/Map;)Lio/github/multiweb/api/WebRequest;
+	public static synthetic fun copy$default (Lio/github/multiweb/api/WebRequest;Ljava/lang/String;Ljava/util/Map;ILjava/lang/Object;)Lio/github/multiweb/api/WebRequest;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getHeaders ()Ljava/util/Map;
+	public final fun getUrl ()Ljava/lang/String;
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class io/github/multiweb/api/WebViewConfig {
+	public fun <init> ()V
+	public fun <init> (ZZZZLjava/util/Set;)V
+	public synthetic fun <init> (ZZZZLjava/util/Set;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public final fun component1 ()Z
+	public final fun component2 ()Z
+	public final fun component3 ()Z
+	public final fun component4 ()Z
+	public final fun component5 ()Ljava/util/Set;
+	public final fun copy (ZZZZLjava/util/Set;)Lio/github/multiweb/api/WebViewConfig;
+	public static synthetic fun copy$default (Lio/github/multiweb/api/WebViewConfig;ZZZZLjava/util/Set;ILjava/lang/Object;)Lio/github/multiweb/api/WebViewConfig;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getAllowedHosts ()Ljava/util/Set;
+	public final fun getFileAccessEnabled ()Z
+	public final fun getJavaScriptEnabled ()Z
+	public final fun getPersistentSessionEnabled ()Z
+	public final fun getThirdPartyCookiesEnabled ()Z
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public abstract interface class io/github/multiweb/api/WebViewController {
+	public abstract fun clearSession ()V
+	public abstract fun dispose ()V
+	public abstract fun getState ()Lio/github/multiweb/api/WebViewState;
+	public abstract fun goBack ()V
+	public abstract fun goForward ()V
+	public abstract fun load (Lio/github/multiweb/api/WebRequest;)V
+	public abstract fun reload ()V
+	public abstract fun stopLoading ()V
+}
+
+public final class io/github/multiweb/api/WebViewState {
+	public fun <init> ()V
+	public fun <init> (Ljava/lang/String;Ljava/lang/String;FZZZLio/github/multiweb/api/WebError;)V
+	public synthetic fun <init> (Ljava/lang/String;Ljava/lang/String;FZZZLio/github/multiweb/api/WebError;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public final fun component1 ()Ljava/lang/String;
+	public final fun component2 ()Ljava/lang/String;
+	public final fun component3 ()F
+	public final fun component4 ()Z
+	public final fun component5 ()Z
+	public final fun component6 ()Z
+	public final fun component7 ()Lio/github/multiweb/api/WebError;
+	public final fun copy (Ljava/lang/String;Ljava/lang/String;FZZZLio/github/multiweb/api/WebError;)Lio/github/multiweb/api/WebViewState;
+	public static synthetic fun copy$default (Lio/github/multiweb/api/WebViewState;Ljava/lang/String;Ljava/lang/String;FZZZLio/github/multiweb/api/WebError;ILjava/lang/Object;)Lio/github/multiweb/api/WebViewState;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getCanGoBack ()Z
+	public final fun getCanGoForward ()Z
+	public final fun getError ()Lio/github/multiweb/api/WebError;
+	public final fun getLoadingProgress ()F
+	public final fun getTitle ()Ljava/lang/String;
+	public final fun getUrl ()Ljava/lang/String;
+	public fun hashCode ()I
+	public final fun isLoading ()Z
+	public fun toString ()Ljava/lang/String;
+}
+
