@@ -26,6 +26,8 @@
 - 发现缺陷时，先增加可复现的失败测试，再修复并运行该测试与受影响回归测试。测试仍失败时继续定位和修复，不得以跳过测试作为完成标准。
 - 公共 API 变更必须运行 `apiCheck`；修改 API 基线只能在确认兼容性策略后进行。
 - 新增或修改 KMP target 时，必须分别编译 Android、iOS、JVM、JS 与 Wasm，并记录无法执行的运行时测试范围。
+- Compose 示例的公共操作逻辑必须与原生视图嵌入代码分离，并使用 `webview-test-fixtures` 的
+  `FakeWebViewController` 编写非设备测试；Android、iOS 与 JCEF 的真实运行时测试不可由该替身代替。
 
 ## 提交
 
