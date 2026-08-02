@@ -1,3 +1,5 @@
+@file:OptIn(org.jetbrains.kotlin.gradle.ExperimentalWasmDsl::class)
+
 import com.android.build.api.dsl.LibraryExtension
 import org.gradle.api.JavaVersion
 import org.jetbrains.kotlin.gradle.dsl.KotlinMultiplatformExtension
@@ -30,6 +32,12 @@ extensions.configure<KotlinMultiplatformExtension> {
 
   androidTarget {
     publishLibraryVariants("release")
+  }
+  js(IR) {
+    browser()
+  }
+  wasmJs {
+    browser()
   }
   iosArm64()
   iosSimulatorArm64()

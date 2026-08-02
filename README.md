@@ -11,6 +11,7 @@ WKWebView 与桌面 JCEF 实现；跨平台模型和导航策略位于 `webview-
 | `webview-android` | Android 系统 WebView 实现。 |
 | `webview-ios` | iOS WKWebView 实现。 |
 | `webview-desktop` | Swing/AWT JCEF 实现。 |
+| `webview-browser` | JS/Wasm 浏览器新窗口导航实现。 |
 | `webview-test-fixtures` | 面向使用方的契约测试夹具。 |
 
 ## 依赖
@@ -27,6 +28,9 @@ dependencies {
 
 iOS 模块应添加到 KMP 的 `iosMain` source set。桌面模块依赖 JCEF 原生运行时，宿主必须先初始化
 进程级 `CefApp`，再在 Swing EDT 中创建 `DesktopWebViewController`。
+
+JS/Wasm 使用 `webview-browser`。该模块按导航策略在浏览器新标签页或新窗口中打开 URL，不提供嵌入式
+WebView 或浏览器全局会话清理能力。
 
 发布和仓库配置见 [发布说明](docs/publishing.md)。
 

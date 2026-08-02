@@ -1,8 +1,9 @@
-.gradle/
-.kotlin/
-.idea/
-build/
-**/build/
-local.properties
-*.iml
-*.hprof
+/build/
+/build-logic/.gradle/
+/build-logic/build/
+/local.properties
+/webview-*/build/
+/.gradle/
+/.idea/
+/.kotlin/
+/kotlin-js-store/
