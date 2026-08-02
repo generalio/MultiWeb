@@ -34,3 +34,9 @@
 
 - 发布凭据只能从 Gradle 属性或环境变量读取，禁止写入 `gradle.properties`、源码、文档示例或 Git 历史。
 - POM 的仓库地址、许可证和开发者信息未确认时必须参数化配置，禁止填入推测值；发布前由仓库所有者提供实际信息。
+
+## GitHub Actions
+
+- Pull Request 与主分支工作流必须至少运行公共 API 校验和受影响平台的构建验证。
+- GitHub Packages 发布仅可由 `vX.Y.Z` 形式的标签触发；工作流发布版本必须由标签派生，禁止使用 `-SNAPSHOT` 版本。
+- 发布工作流必须显式声明最小权限，并只使用 GitHub Actions 提供的短期 `GITHUB_TOKEN`。

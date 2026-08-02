@@ -29,3 +29,5 @@ iOS 模块应添加到 KMP 的 `iosMain` source set。桌面模块依赖 JCEF �
 进程级 `CefApp`，再在 Swing EDT 中创建 `DesktopWebViewController`。
 
 发布和仓库配置见 [发布说明](docs/publishing.md)。
+
+GitHub Packages 的正式版本由 `vX.Y.Z` Git 标签自动发布，详细版本管理流程同样见发布说明。

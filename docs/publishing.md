@@ -11,21 +11,32 @@
 使用方加入 `mavenLocal()` 后，即可使用 `io.github.multiweb` 下的各模块坐标。当前版本由
 `VERSION_NAME` 决定。
 
-## GitHub Packages
+## GitHub Packages 自动发布
 
-在本机 Gradle 用户目录的 `gradle.properties` 或 CI 环境中提供下列值：
+仓库内的 [发布工作流](../.github/workflows/publish.yml) 会在推送 `vX.Y.Z` 标签时自动执行：
 
-```properties
-MULTIWEB_GITHUB_REPOSITORY=<owner>/<repository>
-MULTIWEB_GITHUB_USER=<GitHub 用户名或机器人账号>
-MULTIWEB_GITHUB_TOKEN=<具备 packages:write 权限的令牌>
-```
+1. 在 macOS runner 上执行公共 API 校验并构建 Android、iOS 与桌面发布物。
+2. 以去除 `v` 前缀后的标签值覆盖本次 Gradle 发布版本。
+3. 使用 GitHub Actions 提供的短期令牌发布到当前仓库的 GitHub Packages。
+4. 在发布成功后创建包含自动生成说明的 GitHub Release。
 
-CI 中可改用 GitHub 提供的 `GITHUB_REPOSITORY`、`GITHUB_ACTOR` 与 `GITHUB_TOKEN` 环境变量。配置后执行：
+正式发布标签必须是 `v主版本.次版本.修订版本`，可追加预发布标识，例如 `v1.2.0-rc.1`；不允许使用
+`SNAPSHOT`。项目当前远端仓库为 `generalio/MultiWeb`，使用方仓库地址为：
+
+`https://maven.pkg.github.com/generalio/MultiWeb`
+
+建议的版本管理流程：
+
+1. 日常开发保持 `VERSION_NAME` 为下一版本的 `-SNAPSHOT`，例如 `0.1.1-SNAPSHOT`。
+2. 合并到 `main` 后，确认“构建校验”工作流通过。
+3. 创建并推送正式标签，例如：
 
 ```shell
-./gradlew publish
+git tag -a v0.1.0 -m "Release 0.1.0"
+git push origin v0.1.0
 ```
+
+4. GitHub Actions 发布完成后，将 `VERSION_NAME` 升级到下一个开发版本并提交，例如 `0.1.1-SNAPSHOT`。
 
 使用方配置仓库：
 
@@ -42,13 +53,8 @@ repositories {
 
 ## 通用 Maven 仓库
 
-支持使用 Basic Auth 的 Maven 仓库。发布环境提供以下属性后执行 `./gradlew publish`：
-
-```properties
-MULTIWEB_MAVEN_REPOSITORY_URL=<仓库部署地址>
-MULTIWEB_MAVEN_USERNAME=<用户名>
-MULTIWEB_MAVEN_PASSWORD=<密码或令牌>
-```
+支持使用 Basic Auth 的 Maven 仓库。发布环境提供仓库地址与认证信息后执行 `./gradlew publish`；认证信息
+只能存放在本机 Gradle 用户目录或 CI 密钥配置中，不得进入此仓库。
 
 POM 的以下属性仅在全部所需值存在时写入，避免生成虚构元数据：
 

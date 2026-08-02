@@ -1,0 +1,38 @@
+name: 构建校验
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    name: macOS 构建校验
+    runs-on: macos-latest
+
+    steps:
+      - name: 检出源码
+        uses: actions/checkout@v4
+
+      - name: 配置 JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+          cache: gradle
+
+      - name: 配置 Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: 安装 Android 编译平台
+        run: sdkmanager "platforms;android-35" "build-tools;35.0.0"
+
+      - name: 校验公共 API 与平台构建
+        run: >-
+          ./gradlew apiCheck :webview-android:assembleRelease :webview-desktop:check
+          --no-parallel -Dorg.gradle.jvmargs=-Xmx2g
