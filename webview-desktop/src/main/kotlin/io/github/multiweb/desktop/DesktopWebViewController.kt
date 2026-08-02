@@ -20,6 +20,7 @@ import org.cef.callback.CefCompletionCallback
 import org.cef.handler.CefDisplayHandlerAdapter
 import org.cef.handler.CefLoadHandler
 import org.cef.handler.CefLoadHandlerAdapter
+import org.cef.handler.CefLifeSpanHandlerAdapter
 import org.cef.handler.CefRequestHandler
 import org.cef.handler.CefRequestHandlerAdapter
 import org.cef.network.CefCookieManager
@@ -47,8 +48,14 @@ class DesktopWebViewController(
   private val navigationDecider = DesktopNavigationDecider(config, navigationPolicy)
   /** 已在 [load] 中通过策略校验的主框架地址，供首次 JCEF 回调直接放行。 */
   private val pendingProgrammaticMainFrameUrls = ConcurrentHashMap.newKeySet<String>()
+  /** JCEF 原生浏览器创建前收到的最新请求；创建完成后必须回放，避免用户首击丢失加载操作。 */
+  private var pendingInitialRequest: WebRequest? = null
   private val client: CefClient
   private val browser: CefBrowser
+
+  /** 原生浏览器是否已完成创建；JCEF 的请求接口在此之前不能可靠执行。 */
+  @Volatile
+  private var isBrowserReady: Boolean = false
 
   /** 供宿主添加到 Swing/AWT 视图层级的 JCEF 原生组件。 */
   val view: Component
@@ -78,6 +85,8 @@ class DesktopWebViewController(
     client = cefApp.createClient().also(::configureClient)
     browser = client.createBrowser("about:blank", false, false)
     view = browser.uiComponent
+    // Compose 的 SwingPanel 不保证触发 JCEF 所需的首次 Swing 绘制；主动创建可避免原生视图保持空白。
+    browser.createImmediately()
   }
 
   override fun load(request: WebRequest) {
@@ -148,9 +157,25 @@ class DesktopWebViewController(
     client.addRequestHandler(createRequestHandler())
     client.addLoadHandler(createLoadHandler())
     client.addDisplayHandler(createDisplayHandler())
+    client.addLifeSpanHandler(createLifeSpanHandler())
   }
 
   private fun loadAllowedRequest(request: WebRequest) {
+    state = state.copy(
+      url = request.url,
+      isLoading = true,
+      loadingProgress = 0f,
+      error = null,
+    )
+    if (!isBrowserReady) {
+      pendingInitialRequest = request
+      return
+    }
+    loadBrowserRequest(request)
+  }
+
+  /** 将已经通过导航策略的请求交给就绪的 JCEF 原生浏览器。 */
+  private fun loadBrowserRequest(request: WebRequest) {
     val cefRequest = CefRequest.create()
     cefRequest.set(
       request.url,
@@ -159,14 +184,26 @@ class DesktopWebViewController(
       LinkedHashMap(request.headers),
     )
     pendingProgrammaticMainFrameUrls += request.url
-    state = state.copy(
-      url = request.url,
-      isLoading = true,
-      loadingProgress = 0f,
-      error = null,
-    )
     browser.loadRequest(cefRequest)
     cefRequest.dispose()
+  }
+
+  /** 在 JCEF 完成原生浏览器创建后回放创建期间暂存的首个加载请求。 */
+  private fun createLifeSpanHandler(): CefLifeSpanHandlerAdapter {
+    return object : CefLifeSpanHandlerAdapter() {
+      override fun onAfterCreated(createdBrowser: CefBrowser) {
+        SwingUtilities.invokeLater {
+          if (isDisposed || createdBrowser !== browser) {
+            return@invokeLater
+          }
+          isBrowserReady = true
+          pendingInitialRequest?.let { request ->
+            pendingInitialRequest = null
+            loadBrowserRequest(request)
+          }
+        }
+      }
+    }
   }
 
   private fun createRequestHandler(): CefRequestHandlerAdapter {

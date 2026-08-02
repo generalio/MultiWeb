@@ -60,6 +60,21 @@ internal class SampleWebViewPresenter(
   /** 请求原生控制器清理其支持范围内的会话数据。 */
   fun clearSession() = runControllerAction(controller::clearSession)
 
+  /**
+   * 同步原生控制器的异步状态变化。
+   *
+   * 页面加载回调可能在用户操作完成后才到达，因此示例界面需要定期调用本方法刷新标题、错误与历史状态。
+   * 返回值表示状态是否变化，调用方可据此避免无意义的 Compose 重组。
+   */
+  fun refreshState(): Boolean {
+    val refreshedState = uiState.copy(webViewState = controller.state)
+    if (refreshedState == uiState) {
+      return false
+    }
+    uiState = refreshedState
+    return true
+  }
+
   private fun runControllerAction(action: () -> Unit) {
     try {
       action()

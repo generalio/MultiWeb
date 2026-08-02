@@ -1,5 +1,6 @@
 package io.github.multiweb.sample
 
+import io.github.multiweb.api.WebRequest
 import io.github.multiweb.testing.FakeWebViewController
 import io.github.multiweb.testing.FakeWebViewOperation
 import kotlin.test.Test
@@ -52,5 +53,17 @@ class SampleWebViewPresenterTest {
 
     assertTrue(controller.sessionCleared)
     assertNull(presenter.uiState.actionError)
+  }
+
+  @Test
+  fun `刷新状态会同步原生控制器的异步回调结果`() {
+    val controller = FakeWebViewController()
+    val presenter = SampleWebViewPresenter(controller)
+
+    controller.load(WebRequest("https://kotlinlang.org"))
+
+    assertTrue(presenter.refreshState())
+    assertEquals("https://kotlinlang.org", presenter.uiState.webViewState.url)
+    assertFalse(presenter.refreshState())
   }
 }
