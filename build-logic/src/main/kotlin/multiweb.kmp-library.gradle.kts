@@ -6,7 +6,7 @@ plugins {
   id("com.android.library")
   id("org.jetbrains.kotlin.multiplatform")
   id("org.jetbrains.kotlinx.binary-compatibility-validator")
-  `maven-publish`
+  id("multiweb.publishing")
 }
 
 extensions.configure<LibraryExtension> {
