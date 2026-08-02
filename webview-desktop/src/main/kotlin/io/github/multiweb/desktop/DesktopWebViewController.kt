@@ -1,0 +1,345 @@
+package io.github.multiweb.desktop
+
+import io.github.multiweb.api.NavigationDecision
+import io.github.multiweb.api.NavigationPolicy
+import io.github.multiweb.api.NavigationRequest
+import io.github.multiweb.api.WebError
+import io.github.multiweb.api.WebErrorCategory
+import io.github.multiweb.api.WebRequest
+import io.github.multiweb.api.WebViewConfig
+import io.github.multiweb.api.WebViewController
+import io.github.multiweb.api.WebViewState
+import java.awt.Component
+import java.util.concurrent.ConcurrentHashMap
+import javax.swing.SwingUtilities
+import org.cef.CefApp
+import org.cef.CefClient
+import org.cef.browser.CefBrowser
+import org.cef.browser.CefFrame
+import org.cef.callback.CefCompletionCallback
+import org.cef.handler.CefDisplayHandlerAdapter
+import org.cef.handler.CefLoadHandler
+import org.cef.handler.CefLoadHandlerAdapter
+import org.cef.handler.CefRequestHandler
+import org.cef.handler.CefRequestHandlerAdapter
+import org.cef.network.CefCookieManager
+import org.cef.network.CefRequest
+
+/**
+ * 基于 JCEF 的桌面 WebView 控制器。
+ *
+ * 必须在 Swing EDT 中创建和调用；宿主通过 [view] 将原生组件加入界面，并在不再需要时调用
+ * [dispose]。构造器接收由宿主初始化的进程级 [CefApp]，控制器不会调用 `CefApp.dispose()`。
+ *
+ * JCEF 不支持按单个浏览器可靠地禁用 JavaScript、第三方 Cookie 或持久化会话。为避免安全配置被
+ * 静默忽略，三个选项均要求调用方明确开启；需要更严格策略时，应在初始化 [CefApp] 前配置运行时。
+ */
+class DesktopWebViewController(
+  /** 宿主初始化并持有的进程级 JCEF 应用实例。 */
+  cefApp: CefApp,
+  /** 跨平台安全配置。 */
+  private val config: WebViewConfig,
+  /** 业务侧导航决策策略。 */
+  navigationPolicy: NavigationPolicy,
+  /** 当策略要求外部处理时由宿主执行的操作。 */
+  private val onExternalNavigation: (NavigationRequest) -> Unit = {},
+) : WebViewController {
+  private val navigationDecider = DesktopNavigationDecider(config, navigationPolicy)
+  /** 已在 [load] 中通过策略校验的主框架地址，供首次 JCEF 回调直接放行。 */
+  private val pendingProgrammaticMainFrameUrls = ConcurrentHashMap.newKeySet<String>()
+  private val client: CefClient
+  private val browser: CefBrowser
+
+  /** 供宿主添加到 Swing/AWT 视图层级的 JCEF 原生组件。 */
+  val view: Component
+
+  /** 控制器是否已释放。释放后除 [dispose] 外的操作都会抛出 [IllegalStateException]。 */
+  @Volatile
+  var isDisposed: Boolean = false
+    private set
+
+  /** JCEF 回调可能来自非 EDT 线程，因此状态使用易变字段保证跨线程可见。 */
+  @Volatile
+  override var state: WebViewState = WebViewState()
+    private set
+
+  init {
+    checkEdt()
+    require(config.javaScriptEnabled) {
+      "JCEF 无法按单个 WebView 可靠禁用 JavaScript，必须显式开启后才能创建桌面控制器。"
+    }
+    require(config.thirdPartyCookiesEnabled) {
+      "JCEF 无法按单个 WebView 可靠禁用第三方 Cookie，必须显式开启后才能创建桌面控制器。"
+    }
+    require(config.persistentSessionEnabled) {
+      "JCEF 会话持久化由进程级 CefApp 配置管理，桌面控制器不支持隔离临时会话。"
+    }
+
+    client = cefApp.createClient().also(::configureClient)
+    browser = client.createBrowser("about:blank", false, false)
+    view = browser.uiComponent
+  }
+
+  override fun load(request: WebRequest) {
+    ensureUsable()
+    val navigationRequest = NavigationRequest(
+      url = request.url,
+      isMainFrame = true,
+      isUserInitiated = false,
+    )
+
+    when (navigationDecider.decide(navigationRequest)) {
+      NavigationDecision.Allow -> loadAllowedRequest(request)
+      NavigationDecision.OpenExternally -> onExternalNavigation(navigationRequest)
+      NavigationDecision.Cancel -> Unit
+    }
+  }
+
+  override fun reload() {
+    ensureUsable()
+    browser.reload()
+  }
+
+  override fun goBack() {
+    ensureUsable()
+    if (browser.canGoBack()) {
+      browser.goBack()
+    }
+  }
+
+  override fun goForward() {
+    ensureUsable()
+    if (browser.canGoForward()) {
+      browser.goForward()
+    }
+  }
+
+  override fun stopLoading() {
+    ensureUsable()
+    browser.stopLoad()
+    state = state.copy(isLoading = false)
+  }
+
+  override fun clearSession() {
+    ensureUsable()
+    CefCookieManager.getGlobalManager().deleteCookies(null, null)
+    CefCookieManager.getGlobalManager().flushStore(CefCompletionCallback {})
+    state = state.copy(
+      canGoBack = false,
+      canGoForward = false,
+    )
+  }
+
+  override fun dispose() {
+    checkEdt()
+    if (isDisposed) {
+      return
+    }
+
+    browser.stopLoad()
+    browser.close(true)
+    view.parent?.remove(view)
+    client.dispose()
+    state = state.copy(isLoading = false)
+    isDisposed = true
+  }
+
+  private fun configureClient(client: CefClient) {
+    client.addRequestHandler(createRequestHandler())
+    client.addLoadHandler(createLoadHandler())
+    client.addDisplayHandler(createDisplayHandler())
+  }
+
+  private fun loadAllowedRequest(request: WebRequest) {
+    val cefRequest = CefRequest.create()
+    cefRequest.set(
+      request.url,
+      "GET",
+      null,
+      LinkedHashMap(request.headers),
+    )
+    pendingProgrammaticMainFrameUrls += request.url
+    state = state.copy(
+      url = request.url,
+      isLoading = true,
+      loadingProgress = 0f,
+      error = null,
+    )
+    browser.loadRequest(cefRequest)
+    cefRequest.dispose()
+  }
+
+  private fun createRequestHandler(): CefRequestHandlerAdapter {
+    return object : CefRequestHandlerAdapter() {
+      override fun onBeforeBrowse(
+        browser: CefBrowser,
+        frame: CefFrame,
+        request: CefRequest,
+        userGesture: Boolean,
+        isRedirect: Boolean,
+      ): Boolean {
+        if (request.url == "about:blank") {
+          return false
+        }
+
+        val navigationRequest = NavigationRequest(
+          url = request.url,
+          isMainFrame = frame.isMain,
+          isUserInitiated = userGesture,
+        )
+        if (
+          navigationRequest.isMainFrame &&
+          !navigationRequest.isUserInitiated &&
+          pendingProgrammaticMainFrameUrls.remove(navigationRequest.url)
+        ) {
+          return false
+        }
+
+        return when (navigationDecider.decide(navigationRequest)) {
+          NavigationDecision.Allow -> false
+          NavigationDecision.OpenExternally -> {
+            onExternalNavigation(navigationRequest)
+            true
+          }
+          NavigationDecision.Cancel -> true
+        }
+      }
+
+      override fun onOpenURLFromTab(
+        browser: CefBrowser,
+        frame: CefFrame,
+        targetUrl: String,
+        userGesture: Boolean,
+      ): Boolean {
+        val navigationRequest = NavigationRequest(
+          url = targetUrl,
+          isMainFrame = frame.isMain,
+          isUserInitiated = userGesture,
+        )
+        return when (navigationDecider.decide(navigationRequest)) {
+          NavigationDecision.Allow -> false
+          NavigationDecision.OpenExternally -> {
+            onExternalNavigation(navigationRequest)
+            true
+          }
+          NavigationDecision.Cancel -> true
+        }
+      }
+
+      override fun onRenderProcessTerminated(
+        browser: CefBrowser,
+        status: CefRequestHandler.TerminationStatus,
+        errorCode: Int,
+        errorString: String,
+      ) {
+        updateError(
+          category = WebErrorCategory.RenderProcess,
+          description = "JCEF 渲染进程已退出：$status（$errorCode，$errorString）。宿主应释放并重建控制器。",
+          failingUrl = state.url,
+        )
+      }
+    }
+  }
+
+  private fun createLoadHandler(): CefLoadHandlerAdapter {
+    return object : CefLoadHandlerAdapter() {
+      override fun onLoadingStateChange(
+        browser: CefBrowser,
+        isLoading: Boolean,
+        canGoBack: Boolean,
+        canGoForward: Boolean,
+      ) {
+        state = state.copy(
+          isLoading = isLoading,
+          loadingProgress = if (isLoading) state.loadingProgress else 1f,
+          canGoBack = canGoBack,
+          canGoForward = canGoForward,
+        )
+      }
+
+      override fun onLoadStart(
+        browser: CefBrowser,
+        frame: CefFrame,
+        transitionType: CefRequest.TransitionType,
+      ) {
+        if (frame.isMain) {
+          state = state.copy(
+            url = frame.url,
+            isLoading = true,
+            loadingProgress = 0f,
+            error = null,
+          )
+        }
+      }
+
+      override fun onLoadEnd(browser: CefBrowser, frame: CefFrame, httpStatusCode: Int) {
+        if (frame.isMain) {
+          state = state.copy(
+            url = frame.url,
+            isLoading = false,
+            loadingProgress = 1f,
+            canGoBack = browser.canGoBack(),
+            canGoForward = browser.canGoForward(),
+          )
+        }
+      }
+
+      override fun onLoadError(
+        browser: CefBrowser,
+        frame: CefFrame,
+        errorCode: CefLoadHandler.ErrorCode,
+        errorText: String,
+        failedUrl: String,
+      ) {
+        if (frame.isMain) {
+          updateError(
+            category = errorCode.toWebErrorCategory(),
+            description = errorText,
+            failingUrl = failedUrl,
+          )
+        }
+      }
+    }
+  }
+
+  private fun createDisplayHandler(): CefDisplayHandlerAdapter {
+    return object : CefDisplayHandlerAdapter() {
+      override fun onTitleChange(browser: CefBrowser, title: String) {
+        state = state.copy(title = title)
+      }
+    }
+  }
+
+  private fun updateError(
+    category: WebErrorCategory,
+    description: String,
+    failingUrl: String?,
+  ) {
+    state = state.copy(
+      isLoading = false,
+      error = WebError(
+        category = category,
+        description = description,
+        failingUrl = failingUrl,
+      ),
+    )
+  }
+
+  private fun CefLoadHandler.ErrorCode.toWebErrorCategory(): WebErrorCategory {
+    return when {
+      name.startsWith("ERR_SSL") || name.startsWith("ERR_CERT") -> WebErrorCategory.Ssl
+      else -> WebErrorCategory.Network
+    }
+  }
+
+  private fun ensureUsable() {
+    checkEdt()
+    check(!isDisposed) { "DesktopWebViewController 已释放，不能继续执行操作。" }
+  }
+
+  private fun checkEdt() {
+    check(SwingUtilities.isEventDispatchThread()) {
+      "DesktopWebViewController 必须在 Swing EDT 中调用。"
+    }
+  }
+}

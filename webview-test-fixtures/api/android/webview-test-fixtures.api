@@ -84,3 +84,4 @@ public final class io/github/multiweb/testing/FakeWebViewOperation$StopLoading :
 	public fun hashCode ()I
 	public fun toString ()Ljava/lang/String;
 }
+

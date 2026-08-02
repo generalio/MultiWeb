@@ -2,9 +2,12 @@
 agp = "8.7.3"
 kotlin = "2.1.0"
 binaryCompatibilityValidator = "0.17.0"
+jcef = "146.0.10"
 
 [plugins]
 android-library = { id = "com.android.library", version.ref = "agp" }
 binary-compatibility-validator = { id = "org.jetbrains.kotlinx.binary-compatibility-validator", version.ref = "binaryCompatibilityValidator" }
 kotlin-multiplatform = { id = "org.jetbrains.kotlin.multiplatform", version.ref = "kotlin" }
 
+[libraries]
+jcefmaven = { module = "me.friwi:jcefmaven", version.ref = "jcef" }

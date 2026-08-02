@@ -26,6 +26,8 @@ extensions.configure<LibraryExtension> {
 extensions.configure<KotlinMultiplatformExtension> {
   jvmToolchain(17)
 
+  jvm()
+
   androidTarget {
     publishLibraryVariants("release")
   }
