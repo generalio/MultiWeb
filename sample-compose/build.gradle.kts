@@ -1,8 +1,23 @@
-@file:OptIn(org.jetbrains.kotlin.gradle.ExperimentalWasmDsl::class)
+@file:OptIn(
+  org.jetbrains.kotlin.gradle.ExperimentalKotlinGradlePluginApi::class,
+  org.jetbrains.kotlin.gradle.ExperimentalWasmDsl::class,
+)
 
 import com.android.build.api.dsl.ApplicationExtension
 import org.gradle.api.JavaVersion
+import org.gradle.api.tasks.JavaExec
 import org.jetbrains.kotlin.gradle.dsl.KotlinMultiplatformExtension
+
+// JCEF 的 macOS Swing 嵌入实现依赖这些 JDK 内部 AWT 包，Java 17+ 必须显式导出。
+val jcefMacOsJvmArguments = if (System.getProperty("os.name").startsWith("Mac")) {
+  listOf(
+    "--add-exports=java.desktop/sun.awt=ALL-UNNAMED",
+    "--add-exports=java.desktop/sun.lwawt=ALL-UNNAMED",
+    "--add-exports=java.desktop/sun.lwawt.macosx=ALL-UNNAMED",
+  )
+} else {
+  emptyList()
+}
 
 plugins {
   alias(libs.plugins.android.application)
@@ -33,7 +48,12 @@ extensions.configure<KotlinMultiplatformExtension> {
   jvmToolchain(17)
 
   androidTarget()
-  jvm("desktop")
+  jvm("desktop") {
+    // 为 Kotlin Multiplatform 生成的 desktopRun 任务指定默认入口，支持 Gradle 和 IDE 直接运行。
+    mainRun {
+      mainClass.set("io.github.multiweb.sample.desktop.MainKt")
+    }
+  }
   iosArm64()
   iosSimulatorArm64()
   iosX64()
@@ -81,5 +101,14 @@ extensions.configure<KotlinMultiplatformExtension> {
 compose.desktop {
   application {
     mainClass = "io.github.multiweb.sample.desktop.MainKt"
+    // JCEF 在 macOS Swing 嵌入时需要访问该 JDK 内部 API；参数同时用于本地运行与打包产物。
+    jvmArgs(*jcefMacOsJvmArguments.toTypedArray())
+  }
+}
+
+tasks.withType<JavaExec>().configureEach {
+  if (name == "desktopRun") {
+    // desktopRun 由 Kotlin 为 IDE 生成，需补充 JCEF 的 JDK 模块访问权限。
+    jvmArgs(*jcefMacOsJvmArguments.toTypedArray())
   }
 }
