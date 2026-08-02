@@ -5,6 +5,7 @@ import kotlin.test.assertEquals
 
 class DefaultNavigationPolicyTest {
   @Test
+  /** 验证默认策略只允许 HTTPS 导航，拒绝自定义 Scheme。 */
   fun `allows only https navigation by default`() {
     val httpsRequest = NavigationRequest(
       url = "https://example.com",
@@ -21,4 +22,3 @@ class DefaultNavigationPolicyTest {
     assertEquals(NavigationDecision.Cancel, DefaultNavigationPolicy.decide(customSchemeRequest))
   }
 }
-
