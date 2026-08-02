@@ -1,0 +1,86 @@
+public final class io/github/multiweb/testing/FakeWebViewController : io/github/multiweb/api/WebViewController {
+	public fun <init> ()V
+	public fun <init> (Lio/github/multiweb/api/NavigationPolicy;)V
+	public synthetic fun <init> (Lio/github/multiweb/api/NavigationPolicy;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public fun clearSession ()V
+	public fun dispose ()V
+	public final fun failLoading (Lio/github/multiweb/api/WebError;)V
+	public final fun getOperations ()Ljava/util/List;
+	public final fun getSessionCleared ()Z
+	public fun getState ()Lio/github/multiweb/api/WebViewState;
+	public fun goBack ()V
+	public fun goForward ()V
+	public final fun isDisposed ()Z
+	public fun load (Lio/github/multiweb/api/WebRequest;)V
+	public fun reload ()V
+	public fun stopLoading ()V
+}
+
+public abstract interface class io/github/multiweb/testing/FakeWebViewOperation {
+}
+
+public final class io/github/multiweb/testing/FakeWebViewOperation$ClearSession : io/github/multiweb/testing/FakeWebViewOperation {
+	public static final field INSTANCE Lio/github/multiweb/testing/FakeWebViewOperation$ClearSession;
+	public fun equals (Ljava/lang/Object;)Z
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class io/github/multiweb/testing/FakeWebViewOperation$Dispose : io/github/multiweb/testing/FakeWebViewOperation {
+	public static final field INSTANCE Lio/github/multiweb/testing/FakeWebViewOperation$Dispose;
+	public fun equals (Ljava/lang/Object;)Z
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class io/github/multiweb/testing/FakeWebViewOperation$FailLoading : io/github/multiweb/testing/FakeWebViewOperation {
+	public fun <init> (Lio/github/multiweb/api/WebError;)V
+	public final fun component1 ()Lio/github/multiweb/api/WebError;
+	public final fun copy (Lio/github/multiweb/api/WebError;)Lio/github/multiweb/testing/FakeWebViewOperation$FailLoading;
+	public static synthetic fun copy$default (Lio/github/multiweb/testing/FakeWebViewOperation$FailLoading;Lio/github/multiweb/api/WebError;ILjava/lang/Object;)Lio/github/multiweb/testing/FakeWebViewOperation$FailLoading;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getError ()Lio/github/multiweb/api/WebError;
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class io/github/multiweb/testing/FakeWebViewOperation$GoBack : io/github/multiweb/testing/FakeWebViewOperation {
+	public static final field INSTANCE Lio/github/multiweb/testing/FakeWebViewOperation$GoBack;
+	public fun equals (Ljava/lang/Object;)Z
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class io/github/multiweb/testing/FakeWebViewOperation$GoForward : io/github/multiweb/testing/FakeWebViewOperation {
+	public static final field INSTANCE Lio/github/multiweb/testing/FakeWebViewOperation$GoForward;
+	public fun equals (Ljava/lang/Object;)Z
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class io/github/multiweb/testing/FakeWebViewOperation$Load : io/github/multiweb/testing/FakeWebViewOperation {
+	public fun <init> (Lio/github/multiweb/api/WebRequest;Lio/github/multiweb/api/NavigationDecision;)V
+	public final fun component1 ()Lio/github/multiweb/api/WebRequest;
+	public final fun component2 ()Lio/github/multiweb/api/NavigationDecision;
+	public final fun copy (Lio/github/multiweb/api/WebRequest;Lio/github/multiweb/api/NavigationDecision;)Lio/github/multiweb/testing/FakeWebViewOperation$Load;
+	public static synthetic fun copy$default (Lio/github/multiweb/testing/FakeWebViewOperation$Load;Lio/github/multiweb/api/WebRequest;Lio/github/multiweb/api/NavigationDecision;ILjava/lang/Object;)Lio/github/multiweb/testing/FakeWebViewOperation$Load;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getDecision ()Lio/github/multiweb/api/NavigationDecision;
+	public final fun getRequest ()Lio/github/multiweb/api/WebRequest;
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class io/github/multiweb/testing/FakeWebViewOperation$Reload : io/github/multiweb/testing/FakeWebViewOperation {
+	public static final field INSTANCE Lio/github/multiweb/testing/FakeWebViewOperation$Reload;
+	public fun equals (Ljava/lang/Object;)Z
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class io/github/multiweb/testing/FakeWebViewOperation$StopLoading : io/github/multiweb/testing/FakeWebViewOperation {
+	public static final field INSTANCE Lio/github/multiweb/testing/FakeWebViewOperation$StopLoading;
+	public fun equals (Ljava/lang/Object;)Z
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}

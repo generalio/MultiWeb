@@ -18,4 +18,4 @@ rootProject.name = "MultiWeb"
 
 includeBuild("build-logic")
 include(":webview-api")
-
+include(":webview-test-fixtures")
