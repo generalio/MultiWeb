@@ -9,6 +9,10 @@ import io.github.multiweb.api.WebRequest
 import io.github.multiweb.api.WebViewConfig
 import io.github.multiweb.api.WebViewController
 import io.github.multiweb.api.WebViewState
+import io.github.multiweb.extension.PageErrorEvent
+import io.github.multiweb.extension.PageFinishedEvent
+import io.github.multiweb.extension.PageStartedEvent
+import io.github.multiweb.extension.WebViewExtension
 import kotlinx.cinterop.ExperimentalForeignApi
 import kotlinx.cinterop.ObjCSignatureOverride
 import platform.CoreGraphics.CGRectMake
@@ -40,6 +44,8 @@ import platform.darwin.NSObject
  * `thirdPartyCookiesEnabled` 无法由单个 WKWebView 精确控制，WebKit 使用系统级 Intelligent
  * Tracking Prevention 管理跨站 Cookie。本实现会保留系统默认隐私策略，不尝试降低该保护等级。
  * [WebRequest.headers] 仅会附加到 HTTP(S) 请求；本地文件加载不适用请求头。
+ *
+ * [extensions] 只会接收平台事件和受限 JS 桥调用，不能替换内部导航代理或绕过 [WebViewConfig] 的安全策略。
  */
 @OptIn(ExperimentalForeignApi::class)
 class IosWebViewController(
@@ -49,9 +55,16 @@ class IosWebViewController(
   navigationPolicy: NavigationPolicy,
   /** 当策略要求外部处理时由宿主执行的操作。 */
   private val onExternalNavigation: (NavigationRequest) -> Unit = {},
+  /** 可选的平台能力扩展；事件按列表顺序派发。 */
+  private val extensions: List<WebViewExtension> = emptyList(),
 ) : WebViewController {
   private val navigationDecider = IosNavigationDecider(config, navigationPolicy)
   private val navigationDelegate = IosNavigationDelegate(this)
+  /** JS 桥处理器必须与 WKWebView 同生命周期保存，避免被 Objective-C 运行时提前释放。 */
+  private val scriptBridgeInstallation = IosScriptBridgeInstaller.create(
+    enabled = config.javaScriptEnabled,
+    bridges = extensions.flatMap(WebViewExtension::scriptBridges),
+  )
   /** 已在 [load] 中通过策略校验的主框架地址，供首次 delegate 回调直接放行。 */
   private val pendingProgrammaticMainFrameUrls = mutableSetOf<String>()
 
@@ -135,6 +148,7 @@ class IosWebViewController(
 
     view.stopLoading()
     view.navigationDelegate = null
+    scriptBridgeInstallation.dispose()
     view.removeFromSuperview()
     state = state.copy(isLoading = false)
     isDisposed = true
@@ -153,6 +167,7 @@ class IosWebViewController(
       } else {
         WKWebsiteDataStore.nonPersistentDataStore()
       }
+      userContentController = scriptBridgeInstallation.userContentController
     }
   }
 
@@ -211,6 +226,9 @@ class IosWebViewController(
       loadingProgress = 0f,
       error = null,
     )
+    state.url?.let { url ->
+      extensions.forEach { extension -> extension.onPageStarted(PageStartedEvent(url)) }
+    }
   }
 
   private fun handlePageFinished() {
@@ -222,17 +240,24 @@ class IosWebViewController(
       canGoBack = view.canGoBack,
       canGoForward = view.canGoForward,
     )
+    state.url?.let { url ->
+      extensions.forEach { extension ->
+        extension.onPageFinished(PageFinishedEvent(url, view.title))
+      }
+    }
   }
 
   private fun handleNavigationError(error: NSError) {
+    val webError = WebError(
+      category = WebErrorCategory.Network,
+      description = error.localizedDescription,
+      failingUrl = state.url,
+    )
     state = state.copy(
       isLoading = false,
-      error = WebError(
-        category = WebErrorCategory.Network,
-        description = error.localizedDescription,
-        failingUrl = state.url,
-      ),
+      error = webError,
     )
+    extensions.forEach { extension -> extension.onPageError(PageErrorEvent(webError)) }
   }
 
   private fun ensureUsable() {
