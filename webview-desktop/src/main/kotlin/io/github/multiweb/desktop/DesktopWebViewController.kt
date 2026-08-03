@@ -23,6 +23,8 @@ import org.cef.handler.CefLoadHandlerAdapter
 import org.cef.handler.CefLifeSpanHandlerAdapter
 import org.cef.handler.CefRequestHandler
 import org.cef.handler.CefRequestHandlerAdapter
+import org.cef.handler.CefResourceRequestHandler
+import org.cef.handler.CefResourceRequestHandlerAdapter
 import org.cef.network.CefCookieManager
 import org.cef.network.CefRequest
 
@@ -44,10 +46,14 @@ class DesktopWebViewController(
   navigationPolicy: NavigationPolicy,
   /** 当策略要求外部处理时由宿主执行的操作。 */
   private val onExternalNavigation: (NavigationRequest) -> Unit = {},
+  /** 浏览器原生关闭且 JCEF 客户端已释放后通知宿主，可用于安全销毁进程级 [CefApp]。 */
+  private val onBrowserClosed: () -> Unit = {},
 ) : WebViewController {
   private val navigationDecider = DesktopNavigationDecider(config, navigationPolicy)
   /** 已在 [load] 中通过策略校验的主框架地址，供首次 JCEF 回调直接放行。 */
   private val pendingProgrammaticMainFrameUrls = ConcurrentHashMap.newKeySet<String>()
+  /** 待写入下一次主框架请求的自定义请求头；不能通过 [CefBrowser.loadRequest] 设置，避免 Chromium 拒绝无效发起方。 */
+  private val pendingProgrammaticMainFrameHeaders = ConcurrentHashMap<String, Map<String, String>>()
   /** JCEF 原生浏览器创建前收到的最新请求；创建完成后必须回放，避免用户首击丢失加载操作。 */
   private var pendingInitialRequest: WebRequest? = null
   private val client: CefClient
@@ -64,6 +70,10 @@ class DesktopWebViewController(
   @Volatile
   var isDisposed: Boolean = false
     private set
+
+  /** JCEF 客户端只能在 [CefLifeSpanHandlerAdapter.onBeforeClose] 后释放，防止原生浏览器仍在关闭时访问已释放对象。 */
+  @Volatile
+  private var isClientDisposed: Boolean = false
 
   /** JCEF 回调可能来自非 EDT 线程，因此状态使用易变字段保证跨线程可见。 */
   @Volatile
@@ -145,12 +155,13 @@ class DesktopWebViewController(
       return
     }
 
+    isDisposed = true
+    pendingInitialRequest = null
+    pendingProgrammaticMainFrameUrls.clear()
+    pendingProgrammaticMainFrameHeaders.clear()
     browser.stopLoad()
     browser.close(true)
-    view.parent?.remove(view)
-    client.dispose()
     state = state.copy(isLoading = false)
-    isDisposed = true
   }
 
   private fun configureClient(client: CefClient) {
@@ -176,16 +187,13 @@ class DesktopWebViewController(
 
   /** 将已经通过导航策略的请求交给就绪的 JCEF 原生浏览器。 */
   private fun loadBrowserRequest(request: WebRequest) {
-    val cefRequest = CefRequest.create()
-    cefRequest.set(
-      request.url,
-      "GET",
-      null,
-      LinkedHashMap(request.headers),
-    )
     pendingProgrammaticMainFrameUrls += request.url
-    browser.loadRequest(cefRequest)
-    cefRequest.dispose()
+    if (request.headers.isNotEmpty()) {
+      pendingProgrammaticMainFrameHeaders[request.url] = LinkedHashMap(request.headers)
+    }
+    // Chromium 146 会拒绝 JCEF loadRequest() 创建的顶级导航（INVALID_INITIATOR_ORIGIN，错误码 213）。
+    // 使用 loadURL() 保留浏览器生成的导航上下文；自定义请求头在资源请求回调中补入。
+    browser.loadURL(request.url)
   }
 
   /** 在 JCEF 完成原生浏览器创建后回放创建期间暂存的首个加载请求。 */
@@ -193,7 +201,11 @@ class DesktopWebViewController(
     return object : CefLifeSpanHandlerAdapter() {
       override fun onAfterCreated(createdBrowser: CefBrowser) {
         SwingUtilities.invokeLater {
-          if (isDisposed || createdBrowser !== browser) {
+          if (createdBrowser !== browser) {
+            return@invokeLater
+          }
+          if (isDisposed) {
+            createdBrowser.close(true)
             return@invokeLater
           }
           isBrowserReady = true
@@ -201,6 +213,18 @@ class DesktopWebViewController(
             pendingInitialRequest = null
             loadBrowserRequest(request)
           }
+        }
+      }
+
+      override fun onBeforeClose(closedBrowser: CefBrowser) {
+        if (closedBrowser !== browser || isClientDisposed) {
+          return
+        }
+        isClientDisposed = true
+        client.dispose()
+        SwingUtilities.invokeLater {
+          view.parent?.remove(view)
+          onBrowserClosed()
         }
       }
     }
@@ -263,6 +287,22 @@ class DesktopWebViewController(
         }
       }
 
+      override fun getResourceRequestHandler(
+        browser: CefBrowser,
+        frame: CefFrame,
+        request: CefRequest,
+        isNavigation: Boolean,
+        isDownload: Boolean,
+        requestInitiator: String,
+        disableDefaultHandling: org.cef.misc.BoolRef,
+      ): CefResourceRequestHandler? {
+        if (!frame.isMain || !isNavigation) {
+          return null
+        }
+        val headers = pendingProgrammaticMainFrameHeaders.remove(request.url) ?: return null
+        return createMainFrameHeaderHandler(headers)
+      }
+
       override fun onRenderProcessTerminated(
         browser: CefBrowser,
         status: CefRequestHandler.TerminationStatus,
@@ -274,6 +314,23 @@ class DesktopWebViewController(
           description = "JCEF 渲染进程已退出：$status（$errorCode，$errorString）。宿主应释放并重建控制器。",
           failingUrl = state.url,
         )
+      }
+    }
+  }
+
+  /** 仅为当前主框架首个请求补充调用方提供的请求头，避免影响页面内的子资源与后续导航。 */
+  private fun createMainFrameHeaderHandler(headers: Map<String, String>): CefResourceRequestHandler {
+    return object : CefResourceRequestHandlerAdapter() {
+      override fun onBeforeResourceLoad(
+        browser: CefBrowser,
+        frame: CefFrame,
+        request: CefRequest,
+      ): Boolean {
+        val requestHeaders = LinkedHashMap<String, String>()
+        request.getHeaderMap(requestHeaders)
+        requestHeaders.putAll(headers)
+        request.setHeaderMap(requestHeaders)
+        return false
       }
     }
   }

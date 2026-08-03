@@ -6,6 +6,9 @@
 import com.android.build.api.dsl.ApplicationExtension
 import org.gradle.api.JavaVersion
 import org.gradle.api.tasks.JavaExec
+import org.gradle.jvm.toolchain.JavaLanguageVersion
+import org.gradle.jvm.toolchain.JavaToolchainService
+import org.gradle.jvm.toolchain.JvmVendorSpec
 import org.jetbrains.kotlin.gradle.dsl.KotlinMultiplatformExtension
 
 // JCEF 的 macOS Swing 嵌入实现依赖这些 JDK 内部 AWT 包，Java 17+ 必须显式导出。
@@ -17,6 +20,12 @@ val jcefMacOsJvmArguments = if (System.getProperty("os.name").startsWith("Mac"))
   )
 } else {
   emptyList()
+}
+
+// macOS 上的 JCEF 与 Compose Swing 互操作依赖 JetBrains Runtime 的 AWT 实现，避免 Microsoft JDK 17 的 AppKit 崩溃。
+val desktopJbrLauncher = extensions.getByType<JavaToolchainService>().launcherFor {
+  languageVersion.set(JavaLanguageVersion.of(21))
+  vendor.set(JvmVendorSpec.JETBRAINS)
 }
 
 plugins {
@@ -108,7 +117,8 @@ compose.desktop {
 
 tasks.withType<JavaExec>().configureEach {
   if (name == "desktopRun") {
-    // desktopRun 由 Kotlin 为 IDE 生成，需补充 JCEF 的 JDK 模块访问权限。
+    // desktopRun 由 Kotlin 为 IDE 生成，必须使用 JBR 运行 JCEF，并补充 JDK 模块访问权限。
+    javaLauncher.set(desktopJbrLauncher)
     jvmArgs(*jcefMacOsJvmArguments.toTypedArray())
   }
 }

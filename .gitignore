@@ -9,3 +9,4 @@
 /.kotlin/
 /kotlin-js-store/
 /sample-compose/jcef-bundle/
+/sample-compose/hs_err_pid*.log

@@ -12,33 +12,42 @@ import io.github.multiweb.api.WebViewConfig
 import io.github.multiweb.desktop.DesktopWebViewController
 import io.github.multiweb.sample.SampleWebViewScreen
 import java.io.File
+import javax.swing.SwingUtilities
 import me.friwi.jcefmaven.CefAppBuilder
 
 /** 桌面示例入口；JCEF 首次启动会按 jcefmaven 配置准备原生运行时。 */
 fun main() = application {
+  val cefApp = remember {
+    CefAppBuilder().apply {
+      // JCEF 原生运行时体积较大，放入用户目录以便多次启动复用，避免污染项目工作区。
+      setInstallDir(jcefInstallDirectory())
+      configureCefUserDataDirectory()
+    }.build()
+  }
+  val controller = remember {
+    DesktopWebViewController(
+      cefApp = cefApp,
+      config = WebViewConfig(
+        javaScriptEnabled = true,
+        thirdPartyCookiesEnabled = true,
+        persistentSessionEnabled = true,
+      ),
+      navigationPolicy = DefaultNavigationPolicy,
+      onBrowserClosed = {
+        // JCEF 在原生关闭回调后才允许销毁进程级 CefApp，随后再结束 Compose 事件循环。
+        SwingUtilities.invokeLater {
+          cefApp.dispose()
+          exitApplication()
+        }
+      },
+    )
+  }
+
   Window(
-    onCloseRequest = ::exitApplication,
+    // 不直接退出 Compose；先等待 JCEF 确认浏览器关闭，避免 macOS AppKit 访问已释放的原生对象。
+    onCloseRequest = controller::dispose,
     title = "MultiWeb Compose 示例",
   ) {
-    val cefApp = remember {
-      CefAppBuilder().apply {
-        // JCEF 原生运行时体积较大，放入用户目录以便多次启动复用，避免污染项目工作区。
-        setInstallDir(jcefInstallDirectory())
-        configureCefUserDataDirectory()
-      }.build()
-    }
-    val controller = remember {
-      DesktopWebViewController(
-        cefApp = cefApp,
-        config = WebViewConfig(
-          javaScriptEnabled = true,
-          thirdPartyCookiesEnabled = true,
-          persistentSessionEnabled = true,
-        ),
-        navigationPolicy = DefaultNavigationPolicy,
-      )
-    }
-
     DisposableEffect(controller) {
       onDispose(controller::dispose)
     }
