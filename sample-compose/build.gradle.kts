@@ -35,6 +35,11 @@ plugins {
   alias(libs.plugins.kotlin.compose)
 }
 
+compose.resources {
+  // 固定资源访问器包名，避免示例包名变化后字体引用无法定位。
+  packageOfResClass = "io.github.multiweb.sample.generated.resources"
+}
+
 extensions.configure<ApplicationExtension> {
   namespace = "io.github.multiweb.sample"
   compileSdk = 35
@@ -81,6 +86,7 @@ extensions.configure<KotlinMultiplatformExtension> {
       implementation(compose.foundation)
       implementation(compose.material3)
       implementation(compose.ui)
+      implementation(compose.components.resources)
       implementation(project(":webview-api"))
     }
     commonTest.dependencies {
