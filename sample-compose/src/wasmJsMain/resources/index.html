@@ -1,0 +1,24 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>MultiWeb Wasm 示例</title>
+    <style>
+      html,
+      body,
+      #ComposeTarget {
+        width: 100%;
+        height: 100%;
+        margin: 0;
+        overflow: hidden;
+      }
+    </style>
+  </head>
+  <body>
+    <!-- ComposeViewport 默认查找此画布节点，Wasm UI 在其中完成绘制。 -->
+    <canvas id="ComposeTarget"></canvas>
+    <!-- 该入口由 wasmJsBrowserDevelopmentRun 的 Webpack 输出生成。 -->
+    <script src="sample-compose.js"></script>
+  </body>
+</html>
