@@ -46,6 +46,7 @@ rootProject.name = "MultiWeb"
 
 includeBuild("build-logic")
 include(":webview-api")
+include(":webview-extension-api")
 include(":webview-test-fixtures")
 include(":webview-android")
 include(":webview-ios")

@@ -1,0 +1,149 @@
+public final class io/github/multiweb/extension/DownloadRequest {
+	public fun <init> (Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/lang/Long;)V
+	public synthetic fun <init> (Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/lang/Long;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public final fun component1 ()Ljava/lang/String;
+	public final fun component2 ()Ljava/lang/String;
+	public final fun component3 ()Ljava/lang/String;
+	public final fun component4 ()Ljava/lang/Long;
+	public final fun copy (Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/lang/Long;)Lio/github/multiweb/extension/DownloadRequest;
+	public static synthetic fun copy$default (Lio/github/multiweb/extension/DownloadRequest;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/lang/Long;ILjava/lang/Object;)Lio/github/multiweb/extension/DownloadRequest;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getContentLength ()Ljava/lang/Long;
+	public final fun getMimeType ()Ljava/lang/String;
+	public final fun getSuggestedFileName ()Ljava/lang/String;
+	public final fun getUrl ()Ljava/lang/String;
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public abstract interface class io/github/multiweb/extension/HostUiRequest {
+}
+
+public final class io/github/multiweb/extension/HostUiRequest$SetFullscreen : io/github/multiweb/extension/HostUiRequest {
+	public fun <init> (Z)V
+	public final fun component1 ()Z
+	public final fun copy (Z)Lio/github/multiweb/extension/HostUiRequest$SetFullscreen;
+	public static synthetic fun copy$default (Lio/github/multiweb/extension/HostUiRequest$SetFullscreen;ZILjava/lang/Object;)Lio/github/multiweb/extension/HostUiRequest$SetFullscreen;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getEnabled ()Z
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class io/github/multiweb/extension/PageErrorEvent {
+	public fun <init> (Lio/github/multiweb/api/WebError;)V
+	public final fun component1 ()Lio/github/multiweb/api/WebError;
+	public final fun copy (Lio/github/multiweb/api/WebError;)Lio/github/multiweb/extension/PageErrorEvent;
+	public static synthetic fun copy$default (Lio/github/multiweb/extension/PageErrorEvent;Lio/github/multiweb/api/WebError;ILjava/lang/Object;)Lio/github/multiweb/extension/PageErrorEvent;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getError ()Lio/github/multiweb/api/WebError;
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class io/github/multiweb/extension/PageFinishedEvent {
+	public fun <init> (Ljava/lang/String;Ljava/lang/String;)V
+	public synthetic fun <init> (Ljava/lang/String;Ljava/lang/String;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public final fun component1 ()Ljava/lang/String;
+	public final fun component2 ()Ljava/lang/String;
+	public final fun copy (Ljava/lang/String;Ljava/lang/String;)Lio/github/multiweb/extension/PageFinishedEvent;
+	public static synthetic fun copy$default (Lio/github/multiweb/extension/PageFinishedEvent;Ljava/lang/String;Ljava/lang/String;ILjava/lang/Object;)Lio/github/multiweb/extension/PageFinishedEvent;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getTitle ()Ljava/lang/String;
+	public final fun getUrl ()Ljava/lang/String;
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class io/github/multiweb/extension/PageStartedEvent {
+	public fun <init> (Ljava/lang/String;)V
+	public final fun component1 ()Ljava/lang/String;
+	public final fun copy (Ljava/lang/String;)Lio/github/multiweb/extension/PageStartedEvent;
+	public static synthetic fun copy$default (Lio/github/multiweb/extension/PageStartedEvent;Ljava/lang/String;ILjava/lang/Object;)Lio/github/multiweb/extension/PageStartedEvent;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getUrl ()Ljava/lang/String;
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public abstract interface class io/github/multiweb/extension/ScriptBridge {
+	public abstract fun getAllowedHosts ()Ljava/util/Set;
+	public abstract fun getName ()Ljava/lang/String;
+	public abstract fun handle (Lio/github/multiweb/extension/ScriptBridgeCall;)Lio/github/multiweb/extension/ScriptBridgeResponse;
+}
+
+public final class io/github/multiweb/extension/ScriptBridgeCall {
+	public fun <init> (Ljava/lang/String;Ljava/lang/String;)V
+	public synthetic fun <init> (Ljava/lang/String;Ljava/lang/String;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public final fun component1 ()Ljava/lang/String;
+	public final fun component2 ()Ljava/lang/String;
+	public final fun copy (Ljava/lang/String;Ljava/lang/String;)Lio/github/multiweb/extension/ScriptBridgeCall;
+	public static synthetic fun copy$default (Lio/github/multiweb/extension/ScriptBridgeCall;Ljava/lang/String;Ljava/lang/String;ILjava/lang/Object;)Lio/github/multiweb/extension/ScriptBridgeCall;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getMethod ()Ljava/lang/String;
+	public final fun getPayload ()Ljava/lang/String;
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class io/github/multiweb/extension/ScriptBridgeResponse {
+	public fun <init> (ZLjava/lang/String;Ljava/lang/String;)V
+	public synthetic fun <init> (ZLjava/lang/String;Ljava/lang/String;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public final fun component1 ()Z
+	public final fun component2 ()Ljava/lang/String;
+	public final fun component3 ()Ljava/lang/String;
+	public final fun copy (ZLjava/lang/String;Ljava/lang/String;)Lio/github/multiweb/extension/ScriptBridgeResponse;
+	public static synthetic fun copy$default (Lio/github/multiweb/extension/ScriptBridgeResponse;ZLjava/lang/String;Ljava/lang/String;ILjava/lang/Object;)Lio/github/multiweb/extension/ScriptBridgeResponse;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getErrorCode ()Ljava/lang/String;
+	public final fun getPayload ()Ljava/lang/String;
+	public fun hashCode ()I
+	public final fun isSuccess ()Z
+	public fun toString ()Ljava/lang/String;
+}
+
+public abstract interface class io/github/multiweb/extension/WebContextAction {
+}
+
+public final class io/github/multiweb/extension/WebContextAction$ImageLongPressed : io/github/multiweb/extension/WebContextAction {
+	public fun <init> (Ljava/lang/String;)V
+	public final fun component1 ()Ljava/lang/String;
+	public final fun copy (Ljava/lang/String;)Lio/github/multiweb/extension/WebContextAction$ImageLongPressed;
+	public static synthetic fun copy$default (Lio/github/multiweb/extension/WebContextAction$ImageLongPressed;Ljava/lang/String;ILjava/lang/Object;)Lio/github/multiweb/extension/WebContextAction$ImageLongPressed;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getUrl ()Ljava/lang/String;
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class io/github/multiweb/extension/WebContextAction$LinkLongPressed : io/github/multiweb/extension/WebContextAction {
+	public fun <init> (Ljava/lang/String;)V
+	public final fun component1 ()Ljava/lang/String;
+	public final fun copy (Ljava/lang/String;)Lio/github/multiweb/extension/WebContextAction$LinkLongPressed;
+	public static synthetic fun copy$default (Lio/github/multiweb/extension/WebContextAction$LinkLongPressed;Ljava/lang/String;ILjava/lang/Object;)Lio/github/multiweb/extension/WebContextAction$LinkLongPressed;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getUrl ()Ljava/lang/String;
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public abstract interface class io/github/multiweb/extension/WebViewExtension {
+	public abstract fun getScriptBridges ()Ljava/util/List;
+	public abstract fun onContextAction (Lio/github/multiweb/extension/WebContextAction;)V
+	public abstract fun onDownloadRequested (Lio/github/multiweb/extension/DownloadRequest;)V
+	public abstract fun onHostUiRequest (Lio/github/multiweb/extension/HostUiRequest;)V
+	public abstract fun onPageError (Lio/github/multiweb/extension/PageErrorEvent;)V
+	public abstract fun onPageFinished (Lio/github/multiweb/extension/PageFinishedEvent;)V
+	public abstract fun onPageStarted (Lio/github/multiweb/extension/PageStartedEvent;)V
+}
+
+public final class io/github/multiweb/extension/WebViewExtension$DefaultImpls {
+	public static fun getScriptBridges (Lio/github/multiweb/extension/WebViewExtension;)Ljava/util/List;
+	public static fun onContextAction (Lio/github/multiweb/extension/WebViewExtension;Lio/github/multiweb/extension/WebContextAction;)V
+	public static fun onDownloadRequested (Lio/github/multiweb/extension/WebViewExtension;Lio/github/multiweb/extension/DownloadRequest;)V
+	public static fun onHostUiRequest (Lio/github/multiweb/extension/WebViewExtension;Lio/github/multiweb/extension/HostUiRequest;)V
+	public static fun onPageError (Lio/github/multiweb/extension/WebViewExtension;Lio/github/multiweb/extension/PageErrorEvent;)V
+	public static fun onPageFinished (Lio/github/multiweb/extension/WebViewExtension;Lio/github/multiweb/extension/PageFinishedEvent;)V
+	public static fun onPageStarted (Lio/github/multiweb/extension/WebViewExtension;Lio/github/multiweb/extension/PageStartedEvent;)V
+}
+

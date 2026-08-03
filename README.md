@@ -8,6 +8,7 @@ WKWebView 与桌面 JCEF 实现；跨平台模型和导航策略位于 `webview-
 | 模块 | 用途 |
 | --- | --- |
 | `webview-api` | 跨平台控制器、状态、请求和安全策略契约。 |
+| `webview-extension-api` | 跨平台页面事件、受信任域名 JS 桥、下载、上下文操作与宿主 UI 扩展契约。 |
 | `webview-android` | Android 系统 WebView 实现。 |
 | `webview-ios` | iOS WKWebView 实现。 |
 | `webview-desktop` | Swing/AWT JCEF 实现。 |
