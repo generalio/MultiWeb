@@ -216,6 +216,31 @@ class DesktopWebViewController(
         }
       }
 
+      override fun onBeforePopup(
+        browser: CefBrowser,
+        frame: CefFrame,
+        targetUrl: String,
+        targetFrameName: String,
+      ): Boolean {
+        val navigationRequest = NavigationRequest(
+          url = targetUrl,
+          // 弹窗被当前浏览器接管后应视为主框架导航。
+          isMainFrame = true,
+          isUserInitiated = true,
+        )
+        return when (navigationDecider.decide(navigationRequest)) {
+          NavigationDecision.Allow -> {
+            loadUrlInCurrentBrowser(targetUrl)
+            true
+          }
+          NavigationDecision.OpenExternally -> {
+            onExternalNavigation(navigationRequest)
+            true
+          }
+          NavigationDecision.Cancel -> true
+        }
+      }
+
       override fun onBeforeClose(closedBrowser: CefBrowser) {
         if (closedBrowser !== browser || isClientDisposed) {
           return
@@ -223,7 +248,6 @@ class DesktopWebViewController(
         isClientDisposed = true
         client.dispose()
         SwingUtilities.invokeLater {
-          view.parent?.remove(view)
           onBrowserClosed()
         }
       }
@@ -274,11 +298,15 @@ class DesktopWebViewController(
       ): Boolean {
         val navigationRequest = NavigationRequest(
           url = targetUrl,
-          isMainFrame = frame.isMain,
+          // 新标签页一旦转由当前浏览器承载，目标请求始终成为主框架导航。
+          isMainFrame = true,
           isUserInitiated = userGesture,
         )
         return when (navigationDecider.decide(navigationRequest)) {
-          NavigationDecision.Allow -> false
+          NavigationDecision.Allow -> {
+            loadUrlInCurrentBrowser(targetUrl)
+            true
+          }
           NavigationDecision.OpenExternally -> {
             onExternalNavigation(navigationRequest)
             true
@@ -314,6 +342,15 @@ class DesktopWebViewController(
           description = "JCEF 渲染进程已退出：$status（$errorCode，$errorString）。宿主应释放并重建控制器。",
           failingUrl = state.url,
         )
+      }
+    }
+  }
+
+  /** 将链接或脚本弹窗改为当前 WebView 的主框架导航，禁止 JCEF 创建脱离宿主的新原生窗口。 */
+  private fun loadUrlInCurrentBrowser(url: String) {
+    SwingUtilities.invokeLater {
+      if (!isDisposed) {
+        loadAllowedRequest(WebRequest(url))
       }
     }
   }
