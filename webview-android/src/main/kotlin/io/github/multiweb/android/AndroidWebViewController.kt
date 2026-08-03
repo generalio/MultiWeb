@@ -22,6 +22,12 @@ import io.github.multiweb.api.WebRequest
 import io.github.multiweb.api.WebViewConfig
 import io.github.multiweb.api.WebViewController
 import io.github.multiweb.api.WebViewState
+import io.github.multiweb.extension.DownloadRequest
+import io.github.multiweb.extension.PageErrorEvent
+import io.github.multiweb.extension.PageFinishedEvent
+import io.github.multiweb.extension.PageStartedEvent
+import io.github.multiweb.extension.WebContextAction
+import io.github.multiweb.extension.WebViewExtension
 
 /**
  * 基于系统 [WebView] 的 Android 控制器。
@@ -32,6 +38,9 @@ import io.github.multiweb.api.WebViewState
  *
  * Android 的 Cookie 存储为进程级资源，当前实现不支持 [WebViewConfig.persistentSessionEnabled]
  * 为 `false` 的隔离临时会话，因此会在构造时拒绝该配置，避免产生不符合契约的安全假设。
+ *
+ * [extensions] 由控制器与内部 Client 组合执行，业务方不能通过它替换导航或安全处理。JS 桥仅通过
+ * AndroidX WebKit 的受限来源消息通道暴露给 [io.github.multiweb.extension.ScriptBridge.allowedHosts]。
  */
 class AndroidWebViewController(
   context: Context,
@@ -41,6 +50,10 @@ class AndroidWebViewController(
   navigationPolicy: NavigationPolicy,
   /** 当策略返回 [NavigationDecision.OpenExternally] 时由宿主执行的操作。 */
   private val onExternalNavigation: (NavigationRequest) -> Unit = {},
+  /** 可选的平台能力扩展；事件按列表顺序派发。 */
+  private val extensions: List<WebViewExtension> = emptyList(),
+  /** 创建原生 WebView 的工厂，可用于注入业务自定义 WebView 子类。 */
+  private val webViewFactory: AndroidWebViewFactory = DefaultAndroidWebViewFactory,
 ) : WebViewController {
   private val navigationDecider = AndroidNavigationDecider(config, navigationPolicy)
 
@@ -64,7 +77,7 @@ class AndroidWebViewController(
       "AndroidWebViewController 暂不支持隔离的临时会话。"
     }
 
-    view = WebView(context).also(::configureWebView)
+    view = webViewFactory.create(context).also(::configureWebView)
   }
 
   override fun load(request: WebRequest) {
@@ -177,6 +190,33 @@ class AndroidWebViewController(
     )
     webView.webViewClient = createWebViewClient()
     webView.webChromeClient = createWebChromeClient()
+    webView.setDownloadListener { url, _, contentDisposition, mimeType, contentLength ->
+      extensions.forEach { extension ->
+        extension.onDownloadRequested(
+          DownloadRequest(
+            url = url,
+            suggestedFileName = android.webkit.URLUtil.guessFileName(url, contentDisposition, mimeType),
+            mimeType = mimeType,
+            contentLength = contentLength.takeIf { it >= 0L },
+          ),
+        )
+      }
+    }
+    webView.setOnLongClickListener { clickedView ->
+      val hitTestResult = (clickedView as WebView).hitTestResult
+      val action = when (hitTestResult.type) {
+        WebView.HitTestResult.SRC_ANCHOR_TYPE -> hitTestResult.extra?.let(WebContextAction::LinkLongPressed)
+        WebView.HitTestResult.IMAGE_TYPE,
+        WebView.HitTestResult.SRC_IMAGE_ANCHOR_TYPE,
+        -> hitTestResult.extra?.let(WebContextAction::ImageLongPressed)
+        else -> null
+      }
+      action?.let { contextAction ->
+        extensions.forEach { extension -> extension.onContextAction(contextAction) }
+      }
+      false
+    }
+    AndroidScriptBridgeInstaller.install(webView, extensions.flatMap(WebViewExtension::scriptBridges))
   }
 
   private fun createWebViewClient(): WebViewClient {
@@ -207,6 +247,9 @@ class AndroidWebViewController(
           loadingProgress = 0f,
           error = null,
         )
+        url?.let { loadedUrl ->
+          extensions.forEach { extension -> extension.onPageStarted(PageStartedEvent(loadedUrl)) }
+        }
       }
 
       override fun onPageFinished(view: WebView, url: String?) {
@@ -217,6 +260,11 @@ class AndroidWebViewController(
           canGoBack = view.canGoBack(),
           canGoForward = view.canGoForward(),
         )
+        url?.let { loadedUrl ->
+          extensions.forEach { extension ->
+            extension.onPageFinished(PageFinishedEvent(loadedUrl, view.title))
+          }
+        }
       }
 
       override fun onReceivedError(
@@ -280,14 +328,16 @@ class AndroidWebViewController(
     description: String,
     failingUrl: String?,
   ) {
+    val error = WebError(
+      category = category,
+      description = description,
+      failingUrl = failingUrl,
+    )
     state = state.copy(
       isLoading = false,
-      error = WebError(
-        category = category,
-        description = description,
-        failingUrl = failingUrl,
-      ),
+      error = error,
     )
+    extensions.forEach { extension -> extension.onPageError(PageErrorEvent(error)) }
   }
 
   private fun ensureUsable() {

@@ -23,6 +23,7 @@ WKWebView 与桌面 JCEF 实现；跨平台模型和导航策略位于 `webview-
 ```kotlin
 dependencies {
   implementation("io.github.multiweb:webview-api:<version>")
+  implementation("io.github.multiweb:webview-extension-api:<version>")
   implementation("io.github.multiweb:webview-android:<version>")
   implementation("io.github.multiweb:webview-desktop:<version>")
 }
@@ -33,6 +34,10 @@ iOS 模块应添加到 KMP 的 `iosMain` source set。桌面模块依赖 JCEF �
 
 JS/Wasm 使用 `webview-browser`。该模块按导航策略在浏览器新标签页或新窗口中打开 URL，不提供嵌入式
 WebView 或浏览器全局会话清理能力。
+
+Android 控制器可通过 `extensions` 安装页面事件、下载、长按上下文操作与受信任域名 JS 桥；通过
+`webViewFactory` 注入业务自定义 `WebView` 子类。控制器始终自行组合安全导航与原生 Client，业务代码
+不得覆盖 `WebViewClient`、`WebChromeClient` 或使用 `addJavascriptInterface` 暴露桥对象。
 
 发布和仓库配置见 [发布说明](docs/publishing.md)。
 
