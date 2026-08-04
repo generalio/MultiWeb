@@ -1,6 +1,10 @@
 package io.github.multiweb.sample
 
 import io.github.multiweb.extension.HostUiRequest
+import io.github.multiweb.extension.NativeWebViewBridgeExtension
+import io.github.multiweb.extension.NativeWebViewBridgeHost
+import io.github.multiweb.extension.NativeWebViewBridgeRequest
+import io.github.multiweb.extension.NativeWebViewBridgeResult
 import io.github.multiweb.extension.ScriptBridge
 import io.github.multiweb.extension.ScriptBridgeCall
 import io.github.multiweb.extension.ScriptBridgeResponse
@@ -59,6 +63,34 @@ internal class SampleWebViewExtension(
     onImageSaveRequested(payload)
     return ScriptBridgeResponse(isSuccess = true, payload = "pending_user_confirmation")
   }
+}
+
+/**
+ * 创建旧 `AndroidWebView` 方法名兼容桥的示例宿主。
+ *
+ * 示例仅处理全屏与图片保存，其他业务请求明确返回不支持。真实应用应直接实现
+ * [NativeWebViewBridgeHost]，将账号、路由、提示或传感器能力接入自身的业务层。
+ */
+internal fun sampleNativeWebViewBridgeExtension(
+  hostUiRequestHandler: (HostUiRequest) -> Unit = {},
+  onImageSaveRequested: (String) -> Unit = {},
+): NativeWebViewBridgeExtension {
+  return NativeWebViewBridgeExtension(
+    allowedHosts = SampleScriptBridgeHosts,
+    host = NativeWebViewBridgeHost { request ->
+      when (request) {
+        is NativeWebViewBridgeRequest.SaveImage -> {
+          onImageSaveRequested(request.url)
+          NativeWebViewBridgeResult.Success("pending_user_confirmation")
+        }
+        is NativeWebViewBridgeRequest.SetFullscreen -> {
+          hostUiRequestHandler(HostUiRequest.SetFullscreen(request.enabled))
+          NativeWebViewBridgeResult.Success()
+        }
+        else -> NativeWebViewBridgeResult.Failure("unsupported_sample_operation")
+      }
+    },
+  )
 }
 
 /** 校验图片地址是否使用声明的 HTTPS CDN 主机，拒绝端口、凭据、控制字符和非 HTTPS 来源。 */

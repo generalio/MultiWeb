@@ -29,8 +29,6 @@ import androidx.core.view.WindowInsetsControllerCompat
 import androidx.lifecycle.DefaultLifecycleObserver
 import androidx.lifecycle.LifecycleOwner
 import io.github.multiweb.android.AndroidWebViewController
-import io.github.multiweb.api.DefaultNavigationPolicy
-import io.github.multiweb.api.WebViewConfig
 import io.github.multiweb.extension.HostUiRequest
 import java.io.File
 import java.io.FileOutputStream
@@ -77,12 +75,29 @@ class MainActivity : ComponentActivity() {
           },
         )
       }
-      val controller = remember(extension) {
+      val nativeBridgeExtension = remember {
+        sampleNativeWebViewBridgeExtension(
+          hostUiRequestHandler = { request ->
+            if (request is HostUiRequest.SetFullscreen) {
+              runOnUiThread {
+                isFullscreen = request.enabled
+              }
+            }
+          },
+          onImageSaveRequested = { imageUrl ->
+            runOnUiThread {
+              pendingImageSaveUrl = imageUrl
+            }
+          },
+        )
+      }
+      val initialization = remember(extension, nativeBridgeExtension) {
+        sampleWebViewInitialization(extensions = listOf(extension, nativeBridgeExtension))
+      }
+      val controller = remember(initialization) {
         AndroidWebViewController(
           context = context,
-          config = WebViewConfig(javaScriptEnabled = true),
-          navigationPolicy = DefaultNavigationPolicy,
-          extensions = listOf(extension),
+          initialization = initialization,
         )
       }
       var canGoBack by remember(controller) { mutableStateOf(controller.state.canGoBack) }

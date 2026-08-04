@@ -12,12 +12,12 @@ import androidx.compose.ui.window.Window
 import androidx.compose.ui.window.WindowPlacement
 import androidx.compose.ui.window.application
 import androidx.compose.ui.window.rememberWindowState
-import io.github.multiweb.api.DefaultNavigationPolicy
-import io.github.multiweb.api.WebViewConfig
 import io.github.multiweb.desktop.DesktopWebViewController
 import io.github.multiweb.extension.HostUiRequest
 import io.github.multiweb.sample.SampleWebViewScreen
 import io.github.multiweb.sample.SampleWebViewExtension
+import io.github.multiweb.sample.sampleWebViewInitialization
+import io.github.multiweb.sample.sampleNativeWebViewBridgeExtension
 import java.io.File
 import java.net.HttpURLConnection
 import java.net.URL
@@ -55,6 +55,27 @@ fun main() = application {
       },
     )
   }
+  val nativeBridgeExtension = remember {
+    sampleNativeWebViewBridgeExtension(
+      hostUiRequestHandler = { request ->
+        if (request is HostUiRequest.SetFullscreen) {
+          SwingUtilities.invokeLater {
+            isFullscreen = request.enabled
+            windowState.placement = if (request.enabled) {
+              WindowPlacement.Fullscreen
+            } else {
+              WindowPlacement.Floating
+            }
+          }
+        }
+      },
+      onImageSaveRequested = { imageUrl ->
+        SwingUtilities.invokeLater {
+          pendingImageSaveUrl = imageUrl
+        }
+      },
+    )
+  }
   val cefApp = remember {
     CefAppBuilder().apply {
       // JCEF 原生运行时体积较大，放入用户目录以便多次启动复用，避免污染项目工作区。
@@ -63,15 +84,17 @@ fun main() = application {
     }.build()
   }
   val controller = remember {
+    val initialization = sampleWebViewInitialization(
+      extensions = listOf(extension, nativeBridgeExtension),
+    )
     DesktopWebViewController(
       cefApp = cefApp,
-      config = WebViewConfig(
-        javaScriptEnabled = true,
-        thirdPartyCookiesEnabled = true,
-        persistentSessionEnabled = true,
+      initialization = initialization.copy(
+        webViewConfig = initialization.webViewConfig.copy(
+          thirdPartyCookiesEnabled = true,
+          persistentSessionEnabled = true,
+        ),
       ),
-      navigationPolicy = DefaultNavigationPolicy,
-      extensions = listOf(extension),
       onBrowserClosed = {
         // JCEF 在原生关闭回调后才允许销毁进程级 CefApp，随后再结束 Compose 事件循环。
         SwingUtilities.invokeLater {

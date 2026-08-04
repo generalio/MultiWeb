@@ -21,6 +21,8 @@ import org.cef.handler.CefMessageRouterHandlerAdapter
 internal data class DesktopScriptBridgeConfiguration(
   /** 业务桥定义。 */
   val bridge: ScriptBridge,
+  /** 平台消息通道使用的内部对象名称。 */
+  val transportName: String,
   /** 当前桥在页面中使用的查询函数名。 */
   val queryFunction: String,
   /** 规范化后的精确 HTTPS 主机名。 */
@@ -43,15 +45,15 @@ internal data class DesktopScriptBridgeConfiguration(
     val hostExpression = allowedHosts.joinToString(" || ") { host ->
       "window.location.hostname === ${host.toJavaScriptString()}"
     }
-    val bridgeName = bridge.name.toJavaScriptString()
+    val transportName = transportName.toJavaScriptString()
     val queryFunction = queryFunction.toJavaScriptString()
-    return """
+    val transportScript = """
       (function() {
         if (window.location.protocol !== 'https:' || !($hostExpression)) return;
         var query = window[$queryFunction];
         if (typeof query !== 'function') return;
         try {
-          Object.defineProperty(window, $bridgeName, {
+          Object.defineProperty(window, $transportName, {
             value: Object.freeze({
               postMessage: function(requestOrMethod, payload) {
                 var method = requestOrMethod;
@@ -89,6 +91,31 @@ internal data class DesktopScriptBridgeConfiguration(
         } catch (_) {}
       })();
     """.trimIndent()
+    return transportScript + facadeInjectionScript().orEmpty()
+  }
+
+  /** 基于内部消息对象创建兼容旧方法名的 Promise 门面。 */
+  private fun facadeInjectionScript(): String? {
+    val facade = bridge.facade ?: return null
+    val methods = facade.methodNames.joinToString(",") { method ->
+      "${method.toJavaScriptString()}:function(payload){return nativeBridge.postMessage(JSON.stringify({method:${method.toJavaScriptString()},payload:payload == null ? '' : String(payload)}));}"
+    }
+    return """
+
+      (function() {
+        var nativeBridge = window[${transportName.toJavaScriptString()}];
+        if (!nativeBridge || typeof nativeBridge.postMessage !== 'function') return;
+        var facade = Object.freeze({$methods});
+        try {
+          Object.defineProperty(window, ${bridge.name.toJavaScriptString()}, {
+            value: facade,
+            enumerable: false,
+            writable: false,
+            configurable: false
+          });
+        } catch (_) {}
+      })();
+    """.trimIndent()
   }
 
   companion object {
@@ -97,12 +124,32 @@ internal data class DesktopScriptBridgeConfiguration(
     /** 校验桥名称和主机名，拒绝通配符、端口及非 ASCII 来源。 */
     fun create(bridges: List<ScriptBridge>): List<DesktopScriptBridgeConfiguration> {
       val bridgeNames = mutableSetOf<String>()
+      val transportNames = mutableSetOf<String>()
       return bridges.map { bridge ->
         require(bridgeNamePattern.matches(bridge.name)) {
           "JS 桥名称必须是 ASCII JavaScript 标识符：${bridge.name}"
         }
         require(bridgeNames.add(bridge.name)) {
           "JS 桥名称不能重复：${bridge.name}"
+        }
+        require(bridgeNamePattern.matches(bridge.transportName)) {
+          "JS 桥内部消息名称必须是 ASCII JavaScript 标识符：${bridge.transportName}"
+        }
+        require(transportNames.add(bridge.transportName)) {
+          "JS 桥内部消息名称不能重复：${bridge.transportName}"
+        }
+        require(bridge.transportName == bridge.name || bridge.facade != null) {
+          "使用独立内部消息名称时必须声明 JS 桥门面：${bridge.name}"
+        }
+        bridge.facade?.let { facade ->
+          require(facade.methodNames.isNotEmpty()) {
+            "JS 桥门面必须声明至少一个方法：${bridge.name}"
+          }
+          facade.methodNames.forEach { methodName ->
+            require(bridgeNamePattern.matches(methodName)) {
+              "JS 桥门面方法必须是 ASCII JavaScript 标识符：$methodName"
+            }
+          }
         }
         require(bridge.allowedHosts.isNotEmpty()) {
           "JS 桥必须声明至少一个受信任主机：${bridge.name}"
@@ -115,7 +162,8 @@ internal data class DesktopScriptBridgeConfiguration(
         }
         DesktopScriptBridgeConfiguration(
           bridge = bridge,
-          queryFunction = "__multiweb_query_${bridge.name}",
+          transportName = bridge.transportName,
+          queryFunction = "__multiweb_query_${bridge.transportName}",
           allowedHosts = allowedHosts,
         )
       }

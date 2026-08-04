@@ -2,8 +2,10 @@ package io.github.multiweb.android
 
 import io.github.multiweb.extension.ScriptBridge
 import io.github.multiweb.extension.ScriptBridgeCall
+import io.github.multiweb.extension.ScriptBridgeFacade
 import io.github.multiweb.extension.ScriptBridgeResponse
 import kotlin.test.Test
+import kotlin.test.assertContains
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
 
@@ -40,6 +42,27 @@ class AndroidScriptBridgeConfigurationTest {
         ),
       )
     }
+  }
+
+  @Test
+  fun `方法门面使用独立传输对象并在文档开始阶段生成 Promise 调用`() {
+    val configuration = AndroidScriptBridgeConfiguration.create(
+      listOf(
+        object : ScriptBridge {
+          override val name = "AndroidWebView"
+          override val transportName = "__multiweb_android_transport"
+          override val allowedHosts = setOf("example.com")
+          override val facade = ScriptBridgeFacade(setOf("getToken", "setFullscreen"))
+
+          override fun handle(call: ScriptBridgeCall): ScriptBridgeResponse? = null
+        },
+      ),
+    ).single()
+
+    assertEquals("__multiweb_android_transport", configuration.transportName)
+    assertContains(requireNotNull(configuration.facadeInjectionScript()), "nativeBridge.postMessage")
+    assertContains(requireNotNull(configuration.facadeInjectionScript()), "AndroidWebView")
+    assertContains(requireNotNull(configuration.facadeInjectionScript()), "getToken")
   }
 
   private fun bridge(name: String = "multiWeb", hosts: Set<String>): ScriptBridge {

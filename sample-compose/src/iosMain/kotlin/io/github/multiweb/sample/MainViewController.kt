@@ -11,8 +11,6 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.interop.UIKitView
 import androidx.compose.ui.window.ComposeUIViewController
-import io.github.multiweb.api.DefaultNavigationPolicy
-import io.github.multiweb.api.WebViewConfig
 import io.github.multiweb.extension.HostUiRequest
 import io.github.multiweb.ios.IosWebViewController
 import kotlinx.cinterop.ObjCSignatureOverride
@@ -82,11 +80,29 @@ private class SampleIosWebViewHostViewController : UIViewController(nibName = nu
         },
       )
     }
-    val controller = remember(extension) {
+    val nativeBridgeExtension = remember {
+      sampleNativeWebViewBridgeExtension(
+        hostUiRequestHandler = { request ->
+          if (request is HostUiRequest.SetFullscreen) {
+            dispatch_async(dispatch_get_main_queue()) {
+              isFullscreen = request.enabled
+              setNeedsStatusBarAppearanceUpdate()
+            }
+          }
+        },
+        onImageSaveRequested = { imageUrl ->
+          dispatch_async(dispatch_get_main_queue()) {
+            pendingImageSaveUrl = imageUrl
+          }
+        },
+      )
+    }
+    val initialization = remember(extension, nativeBridgeExtension) {
+      sampleWebViewInitialization(extensions = listOf(extension, nativeBridgeExtension))
+    }
+    val controller = remember(initialization) {
       IosWebViewController(
-        config = WebViewConfig(javaScriptEnabled = true),
-        navigationPolicy = DefaultNavigationPolicy,
-        extensions = listOf(extension),
+        initialization = initialization,
       )
     }
 

@@ -2,6 +2,7 @@ package io.github.multiweb.desktop
 
 import io.github.multiweb.extension.ScriptBridge
 import io.github.multiweb.extension.ScriptBridgeCall
+import io.github.multiweb.extension.ScriptBridgeFacade
 import io.github.multiweb.extension.ScriptBridgeResponse
 import java.lang.reflect.Proxy
 import org.cef.browser.CefBrowser
@@ -76,6 +77,27 @@ class DesktopScriptBridgeConfigurationTest {
     )
     assertEquals(403, rejectedCallback.failureCode)
     assertEquals("untrusted_origin", rejectedCallback.failureMessage)
+  }
+
+  @Test
+  fun `方法门面使用独立内部传输对象`() {
+    val configuration = DesktopScriptBridgeConfiguration.create(
+      listOf(
+        object : ScriptBridge {
+          override val name = "AndroidWebView"
+          override val transportName = "__multiweb_android_transport"
+          override val allowedHosts = setOf("example.com")
+          override val facade = ScriptBridgeFacade(setOf("getToken", "setFullscreen"))
+
+          override fun handle(call: ScriptBridgeCall): ScriptBridgeResponse? = null
+        },
+      ),
+    ).single()
+
+    assertEquals("__multiweb_query___multiweb_android_transport", configuration.queryFunction)
+    assertContains(configuration.injectionScript(), "AndroidWebView")
+    assertContains(configuration.injectionScript(), "__multiweb_android_transport")
+    assertContains(configuration.injectionScript(), "nativeBridge.postMessage")
   }
 
   private fun bridge(

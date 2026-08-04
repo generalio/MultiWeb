@@ -98,12 +98,41 @@ interface ScriptBridge {
   /** 页面脚本访问该桥时使用的全局名称。 */
   val name: String
 
+  /**
+   * 平台消息通道使用的内部全局名称。
+   *
+   * 默认与 [name] 相同。需要为旧网页提供同名方法门面时，可设置为不同的名称，避免将底层消息对象作为
+   * 正式网页 API；平台仍必须校验每一条消息，并且只会向 [allowedHosts] 中的 HTTPS 主文档安装它。
+   */
+  val transportName: String
+    get() = name
+
   /** 允许使用该桥的主机名集合，不能为空且不支持通配符。 */
   val allowedHosts: Set<String>
+
+  /**
+   * 可选的 JavaScript 方法门面。
+   *
+   * 门面只把声明的方法转换为 [handle] 调用，不会向页面暴露任意 Kotlin 对象。每个方法都接收至多一个参数，
+   * 并以异步 Promise 形式返回 [ScriptBridgeResponse]；未声明时页面仍直接使用消息通道的 `postMessage`。
+   */
+  val facade: ScriptBridgeFacade?
+    get() = null
 
   /** 处理来自网页的显式方法调用，并返回可序列化的响应；不需要响应时返回 `null`。 */
   fun handle(call: ScriptBridgeCall): ScriptBridgeResponse?
 }
+
+/**
+ * 暴露给网页的受限方法集合。
+ *
+ * 方法名称必须由平台实现校验为 JavaScript 标识符；调用参数统一转换为字符串，复杂参数应由调用方自行使用
+ * JSON 文本序列化并在 [ScriptBridge.handle] 中校验。
+ */
+data class ScriptBridgeFacade(
+  /** 可从网页调用的方法名称集合。 */
+  val methodNames: Set<String>,
+)
 
 /** JS 桥调用参数。 */
 data class ScriptBridgeCall(

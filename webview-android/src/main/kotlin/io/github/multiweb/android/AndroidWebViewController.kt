@@ -30,6 +30,7 @@ import io.github.multiweb.extension.PageFinishedEvent
 import io.github.multiweb.extension.PageStartedEvent
 import io.github.multiweb.extension.WebContextAction
 import io.github.multiweb.extension.WebViewExtension
+import io.github.multiweb.extension.WebViewInitialization
 
 /**
  * 基于系统 [WebView] 的 Android 控制器。
@@ -57,6 +58,26 @@ class AndroidWebViewController(
   /** 创建原生 WebView 的工厂，可用于注入业务自定义 WebView 子类。 */
   private val webViewFactory: AndroidWebViewFactory = DefaultAndroidWebViewFactory,
 ) : WebViewController {
+  /**
+   * 使用跨平台初始化对象创建 Android 控制器。
+   *
+   * 外部导航仍由 Android 宿主处理，避免公共配置隐式创建 Intent；[webViewFactory] 保留给需要自定义 WebView
+   * 子类的调用方。
+   */
+  constructor(
+    context: Context,
+    initialization: WebViewInitialization,
+    onExternalNavigation: (NavigationRequest) -> Unit = {},
+    webViewFactory: AndroidWebViewFactory = DefaultAndroidWebViewFactory,
+  ) : this(
+    context = context,
+    config = initialization.webViewConfig,
+    navigationPolicy = initialization.navigationPolicy,
+    onExternalNavigation = onExternalNavigation,
+    extensions = initialization.extensions,
+    webViewFactory = webViewFactory,
+  )
+
   private val navigationDecider = AndroidNavigationDecider(config, navigationPolicy)
 
   /**

@@ -30,10 +30,20 @@ internal object AndroidScriptBridgeInstaller {
     AndroidScriptBridgeConfiguration.create(bridges).forEach { configuration ->
       WebViewCompat.addWebMessageListener(
         webView,
-        configuration.bridge.name,
+        configuration.transportName,
         configuration.allowedOriginRules,
         AndroidScriptBridgeListener(configuration),
       )
+      configuration.facadeInjectionScript()?.let { script ->
+        require(WebViewFeature.isFeatureSupported(WebViewFeature.DOCUMENT_START_SCRIPT)) {
+          "当前 Android System WebView 不支持文档开始阶段的 JS 桥门面。"
+        }
+        WebViewCompat.addDocumentStartJavaScript(
+          webView,
+          script,
+          configuration.allowedOriginRules,
+        )
+      }
     }
   }
 }
@@ -41,19 +51,95 @@ internal object AndroidScriptBridgeInstaller {
 /** 经过安全校验的 Android JS 桥配置。 */
 internal data class AndroidScriptBridgeConfiguration(
   val bridge: ScriptBridge,
+  val transportName: String,
   val allowedOriginRules: Set<String>,
 ) {
+  /** 生成受限来源的 Promise 门面；内部消息对象始终使用与网页名称不同的 [transportName]。 */
+  fun facadeInjectionScript(): String? {
+    val facade = bridge.facade ?: return null
+    val methods = facade.methodNames.joinToString(",") { method ->
+      "${method.toJavaScriptString()}:function(payload){return invoke(${method.toJavaScriptString()},payload);}"
+    }
+    return """
+      (function() {
+        var nativeBridge = window[${transportName.toJavaScriptString()}];
+        if (!nativeBridge || typeof nativeBridge.postMessage !== 'function') return;
+        var sequence = 0;
+        var pending = Object.create(null);
+        nativeBridge.onmessage = function(event) {
+          var response;
+          try { response = JSON.parse(event.data); } catch (_) { return; }
+          if (!response || typeof response.id !== 'string') return;
+          var callback = pending[response.id];
+          if (!callback) return;
+          delete pending[response.id];
+          if (response.isSuccess) callback.resolve(response);
+          else {
+            var error = new Error(response.errorCode || 'bridge_error');
+            error.response = response;
+            callback.reject(error);
+          }
+        };
+        function invoke(method, payload) {
+          return new Promise(function(resolve, reject) {
+            var id = String(++sequence);
+            pending[id] = { resolve: resolve, reject: reject };
+            try {
+              nativeBridge.postMessage(JSON.stringify({
+                id: id,
+                method: method,
+                payload: payload == null ? '' : String(payload)
+              }));
+            } catch (error) {
+              delete pending[id];
+              reject(error);
+            }
+          });
+        }
+        var facade = Object.freeze({$methods});
+        try {
+          Object.defineProperty(window, ${bridge.name.toJavaScriptString()}, {
+            value: facade,
+            enumerable: false,
+            writable: false,
+            configurable: false
+          });
+        } catch (_) {}
+      })();
+    """.trimIndent()
+  }
+
   companion object {
     private val bridgeNamePattern = Regex("[A-Za-z_$][A-Za-z0-9_$]*")
 
     fun create(bridges: List<ScriptBridge>): List<AndroidScriptBridgeConfiguration> {
       val bridgeNames = mutableSetOf<String>()
+      val transportNames = mutableSetOf<String>()
       return bridges.map { bridge ->
         require(bridgeNamePattern.matches(bridge.name)) {
           "JS 桥名称必须是 ASCII JavaScript 标识符：${bridge.name}"
         }
         require(bridgeNames.add(bridge.name)) {
           "JS 桥名称不能重复：${bridge.name}"
+        }
+        require(bridgeNamePattern.matches(bridge.transportName)) {
+          "JS 桥内部消息名称必须是 ASCII JavaScript 标识符：${bridge.transportName}"
+        }
+        require(transportNames.add(bridge.transportName)) {
+          "JS 桥内部消息名称不能重复：${bridge.transportName}"
+        }
+        require(bridge.transportName == bridge.name || bridge.facade != null) {
+          "使用独立内部消息名称时必须声明 JS 桥门面：${bridge.name}"
+        }
+        bridge.facade?.let { facade ->
+          require(facade.methodNames.isNotEmpty()) {
+            "JS 桥门面必须声明至少一个方法：${bridge.name}"
+          }
+          facade.methodNames.forEach { methodName ->
+            require(bridgeNamePattern.matches(methodName)) {
+              "JS 桥门面方法必须是 ASCII JavaScript 标识符：$methodName"
+            }
+          }
         }
         require(bridge.allowedHosts.isNotEmpty()) {
           "JS 桥必须声明至少一个受信任主机：${bridge.name}"
@@ -67,6 +153,7 @@ internal data class AndroidScriptBridgeConfiguration(
         }
         AndroidScriptBridgeConfiguration(
           bridge = bridge,
+          transportName = bridge.transportName,
           allowedOriginRules = allowedHosts.mapTo(linkedSetOf()) { "https://$it" },
         )
       }
@@ -99,26 +186,29 @@ private class AndroidScriptBridgeListener(
       return
     }
 
-    val call = message.data?.toScriptBridgeCall()
-    if (call == null) {
+    val parsedCall = message.data?.toScriptBridgeCall()
+    if (parsedCall == null) {
       replyProxy.postMessage(failureResponse("invalid_request"))
       return
     }
 
-    val response = runCatching { configuration.bridge.handle(call) }
+    val response = runCatching { configuration.bridge.handle(parsedCall.call) }
       .getOrElse { ScriptBridgeResponse(isSuccess = false, errorCode = "bridge_exception") }
       ?: ScriptBridgeResponse(isSuccess = true)
-    replyProxy.postMessage(response.toJson())
+    replyProxy.postMessage(response.toJson(parsedCall.id))
   }
 
-  private fun String.toScriptBridgeCall(): ScriptBridgeCall? {
+  private fun String.toScriptBridgeCall(): ParsedScriptBridgeCall? {
     return runCatching {
       val request = JSONObject(this)
       val method = request.optString("method")
       require(method.isNotBlank())
-      ScriptBridgeCall(
-        method = method,
-        payload = request.optString("payload"),
+      ParsedScriptBridgeCall(
+        call = ScriptBridgeCall(
+          method = method,
+          payload = request.optString("payload"),
+        ),
+        id = request.optString("id").takeIf { it.isNotBlank() },
       )
     }.getOrNull()
   }
@@ -127,11 +217,47 @@ private class AndroidScriptBridgeListener(
     return ScriptBridgeResponse(isSuccess = false, errorCode = errorCode).toJson()
   }
 
-  private fun ScriptBridgeResponse.toJson(): String {
+  private fun ScriptBridgeResponse.toJson(callId: String? = null): String {
     return JSONObject()
       .put("isSuccess", isSuccess)
       .put("payload", payload)
       .put("errorCode", errorCode)
+      .apply {
+        if (callId != null) {
+          put("id", callId)
+        }
+      }
       .toString()
+  }
+
+  /** Promise 门面的关联标识只存在于平台消息协议，不泄露到公共桥调用契约。 */
+  private data class ParsedScriptBridgeCall(
+    val call: ScriptBridgeCall,
+    val id: String?,
+  )
+}
+
+/** 使用纯 Kotlin 生成 JavaScript 字符串字面量，保证本地单元测试不依赖 Android 框架桩实现。 */
+private fun String.toJavaScriptString(): String {
+  return buildString(length + 2) {
+    append('"')
+    for (character in this@toJavaScriptString) {
+      when (character) {
+        '\\' -> append("\\\\")
+        '"' -> append("\\\"")
+        '\b' -> append("\\b")
+        '\u000C' -> append("\\f")
+        '\n' -> append("\\n")
+        '\r' -> append("\\r")
+        '\t' -> append("\\t")
+        else -> if (character.code < 0x20) {
+          append("\\u")
+          append(character.code.toString(16).padStart(4, '0'))
+        } else {
+          append(character)
+        }
+      }
+    }
+    append('"')
   }
 }

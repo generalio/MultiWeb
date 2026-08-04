@@ -150,6 +150,56 @@ val extension = object : WebViewExtension {
 将扩展通过 `extensions = listOf(extension)` 传给 Android、iOS 或 Desktop 控制器。桥名应使用业务命名空间；
 调用参数和返回值必须由业务方自行做格式、权限和大小校验。
 
+### 公共初始化与业务桥
+
+`WebViewInitialization` 将安全配置、导航策略和扩展列表集中定义。Android、iOS、Desktop 控制器均可接收它，
+平台入口只保留原生视图、外部导航、系统权限等宿主代码：
+
+```kotlin
+val businessBridge = NativeWebViewBridgeExtension(
+  allowedHosts = setOf("app.example.com"),
+  host = NativeWebViewBridgeHost { request ->
+    when (request) {
+      NativeWebViewBridgeRequest.GetToken -> {
+        // 调用方自行读取令牌；不要让库依赖具体账号服务。
+        NativeWebViewBridgeResult.Success(payload = "")
+      }
+      is NativeWebViewBridgeRequest.SetFullscreen -> {
+        // 调用方切换 Activity、UIViewController 或 Window 的全屏状态。
+        NativeWebViewBridgeResult.Success()
+      }
+      else -> NativeWebViewBridgeResult.Failure("unsupported_operation")
+    }
+  },
+)
+
+val initialization = WebViewInitialization(
+  webViewConfig = WebViewConfig(javaScriptEnabled = true),
+  navigationPolicy = DefaultNavigationPolicy,
+  extensions = listOf(businessBridge),
+)
+
+val controller = AndroidWebViewController(
+  context = applicationContext,
+  initialization = initialization,
+)
+```
+
+该扩展兼容旧项目常用的 `AndroidWebView` 方法名：`savePic`、`onLoad`、`initSensor`、`jump`、`exeJs`、
+`toast`、`getStu`、`isDark`、`setFullscreen`、`getSystemBarInsets`、`getToken`。它们只会转换为
+`NativeWebViewBridgeRequest`，不包含账号、路由、权限、下载、传感器或脚本执行的业务实现。
+
+三端统一使用 Promise；旧同步 getter 需要迁移为 `await`：
+
+```javascript
+const { payload: token } = await window.AndroidWebView.getToken();
+await window.AndroidWebView.setFullscreen(true);
+await window.AndroidWebView.savePic("https://cdn.example.com/poster.png");
+```
+
+桥只会向精确的 HTTPS 主机注入。内部消息通道是平台实现细节，不应由页面直接依赖；平台仍会在接收消息时
+复核来源。JS/Wasm 的 `webview-browser` 不依赖扩展 API，因此不会安装该桥。
+
 ### Compose 示例桥
 
 `sample-compose` 仅向 `app.redrock.team` 与 `m.app.redrock.team` 注入名为 `multiWebSample` 的桥。网页使用
