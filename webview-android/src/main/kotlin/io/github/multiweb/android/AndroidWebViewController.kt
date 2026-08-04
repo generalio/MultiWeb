@@ -12,6 +12,7 @@ import android.webkit.WebChromeClient
 import android.webkit.WebResourceError
 import android.webkit.WebResourceRequest
 import android.webkit.WebSettings
+import android.webkit.WebStorage
 import android.webkit.WebView
 import android.webkit.WebViewClient
 import io.github.multiweb.api.NavigationDecision
@@ -134,6 +135,7 @@ class AndroidWebViewController(
     view.clearCache(true)
     view.clearFormData()
     view.clearHistory()
+    WebStorage.getInstance().deleteAllData()
     CookieManager.getInstance().removeAllCookies(null)
     CookieManager.getInstance().flush()
     state = state.copy(
@@ -173,16 +175,21 @@ class AndroidWebViewController(
     // 部分厂商 WebView 在 Compose AndroidView 中使用硬件层时会忽略宿主偏移，覆盖整个窗口。
     // 使用软件层保证其绘制边界始终遵循 Compose 测量结果，避免页面与宿主控件错位。
     webView.setLayerType(View.LAYER_TYPE_SOFTWARE, null)
+    val settings = config.toAndroidWebViewSettings()
     with(webView.settings) {
-      javaScriptEnabled = config.javaScriptEnabled
+      javaScriptEnabled = settings.javaScriptEnabled
       javaScriptCanOpenWindowsAutomatically = false
-      domStorageEnabled = false
-      allowFileAccess = config.fileAccessEnabled
+      domStorageEnabled = settings.domStorageEnabled
+      allowFileAccess = settings.fileAccessEnabled
       allowContentAccess = false
-      mixedContentMode = WebSettings.MIXED_CONTENT_NEVER_ALLOW
+      mixedContentMode = if (settings.mixedContentAllowed) {
+        WebSettings.MIXED_CONTENT_ALWAYS_ALLOW
+      } else {
+        WebSettings.MIXED_CONTENT_NEVER_ALLOW
+      }
       setSupportMultipleWindows(false)
       setGeolocationEnabled(false)
-      mediaPlaybackRequiresUserGesture = true
+      mediaPlaybackRequiresUserGesture = !settings.mediaPlaybackWithoutUserGestureAllowed
       if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
         safeBrowsingEnabled = true
       }

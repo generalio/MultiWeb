@@ -74,6 +74,10 @@ AndroidView(
 `controller.onHostResume()`。需要自定义 WebView 子类时，用 `webViewFactory` 注入；不要自行设置
 `WebViewClient`、`WebChromeClient`，也不要使用 `addJavascriptInterface`。
 
+Android 会启用同源 DOM Storage，以兼容使用 `localStorage` 或 `sessionStorage` 初始化的现代 HTTPS 页面；
+调用 `clearSession()` 会同时删除 Web Storage、缓存、历史记录和 Cookie。该兼容性设置不会放宽 HTTP 混合内容、
+本地文件访问或无用户手势自动播放的默认限制。
+
 ## iOS
 
 在 KMP 的 `iosMain` 中添加实现模块：
