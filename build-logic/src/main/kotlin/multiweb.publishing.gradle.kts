@@ -1,4 +1,5 @@
 import com.vanniktech.maven.publish.MavenPublishBaseExtension
+import org.gradle.jvm.tasks.Jar
 import org.gradle.api.publish.PublishingExtension
 import org.gradle.api.publish.maven.MavenPublication
 
@@ -24,6 +25,12 @@ val mavenCentralEnabled = providers.gradleProperty("MULTIWEB_ENABLE_MAVEN_CENTRA
   .map(String::toBoolean)
   .orElse(false)
 
+// Central Portal 要求 JVM 构件带有 javadoc 分类器；跨平台源码没有统一的 JVM 文档任务，
+// 因此使用官方发布插件支持的空 Javadoc JAR，避免伪造平台专属 API 文档。
+val javadocJar = tasks.register<Jar>("emptyJavadocJar") {
+  archiveClassifier.set("javadoc")
+}
+
 extensions.configure<MavenPublishBaseExtension> {
   if (mavenCentralEnabled.get()) {
     // 发布任务会自动向 Central Portal 上传并完成发布；仅限具备 CI 密钥的正式发布流程。
@@ -36,6 +43,7 @@ extensions.configure<PublishingExtension> {
   publications.withType(MavenPublication::class.java).configureEach {
     groupId = project.group.toString()
     version = project.version.toString()
+    artifact(javadocJar)
 
     pom {
       name.set("MultiWeb ${project.name}")

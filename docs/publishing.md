@@ -29,7 +29,15 @@ dependencies {
 ```shell
 gpg --full-generate-key
 gpg --list-secret-keys --keyid-format LONG
-gpg --keyserver keyserver.ubuntu.com --send-keys <密钥ID>
+gpg --keyserver hkps://keys.openpgp.org --send-keys <密钥ID>
+```
+
+Central Portal 会按签名指纹查询公开密钥。执行上传后，打开
+`https://keys.openpgp.org/`，按密钥邮箱完成验证；未完成邮箱验证时，密钥可能不会被服务器公开给 Central Portal。
+也可以用以下命令确认服务器能返回公钥：
+
+```shell
+gpg --keyserver hkps://keys.openpgp.org --recv-keys <密钥ID>
 ```
 
 导出用于 CI 的 ASCII 装甲私钥。该命令会在终端显示私钥，只能复制到 GitHub Secret，不能保存到项目文件：
