@@ -55,10 +55,10 @@ class DesktopWebViewController(
   navigationPolicy: NavigationPolicy,
   /** 当策略要求外部处理时由宿主执行的操作。 */
   private val onExternalNavigation: (NavigationRequest) -> Unit = {},
-  /** 可选的平台能力扩展；事件按列表顺序派发。 */
-  private val extensions: List<WebViewExtension> = emptyList(),
   /** 浏览器原生关闭且 JCEF 客户端已释放后通知宿主，可用于安全销毁进程级 [CefApp]。 */
   private val onBrowserClosed: () -> Unit = {},
+  /** 可选的平台能力扩展；事件按列表顺序派发。 */
+  private val extensions: List<WebViewExtension> = emptyList(),
 ) : WebViewController {
   private val navigationDecider = DesktopNavigationDecider(config, navigationPolicy)
   /** 已在 [load] 中通过策略校验的主框架地址，供首次 JCEF 回调直接放行。 */
