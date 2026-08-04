@@ -1,0 +1,254 @@
+package io.github.multiweb.desktop
+
+import io.github.multiweb.extension.ScriptBridge
+import io.github.multiweb.extension.ScriptBridgeCall
+import io.github.multiweb.extension.ScriptBridgeResponse
+import java.net.URI
+import java.net.URLDecoder
+import java.nio.charset.StandardCharsets
+import org.cef.CefClient
+import org.cef.browser.CefBrowser
+import org.cef.browser.CefFrame
+import org.cef.browser.CefMessageRouter
+import org.cef.callback.CefQueryCallback
+import org.cef.handler.CefMessageRouterHandlerAdapter
+
+/**
+ * JCEF 单个桥的安全配置。
+ *
+ * CEF 会把查询函数注入所有页面，因此配置中的主机校验既在脚本注入前执行，也在原生回调中再次执行。
+ */
+internal data class DesktopScriptBridgeConfiguration(
+  /** 业务桥定义。 */
+  val bridge: ScriptBridge,
+  /** 当前桥在页面中使用的查询函数名。 */
+  val queryFunction: String,
+  /** 规范化后的精确 HTTPS 主机名。 */
+  val allowedHosts: Set<String>,
+) {
+  /** 判断 JCEF 回调所在的主框架是否属于受信任来源。 */
+  fun isAllowedUrl(url: String): Boolean {
+    val parsed = runCatching { URI(url) }.getOrNull() ?: return false
+    return parsed.scheme.equals("https", ignoreCase = true) &&
+      parsed.host?.lowercase() in allowedHosts
+  }
+
+  /** 仅在受信任主文档中定义桥对象，桥请求通过 CEF 异步查询回传 Promise。 */
+  fun injectionScript(): String {
+    val hostExpression = allowedHosts.joinToString(" || ") { host ->
+      "window.location.hostname === ${host.toJavaScriptString()}"
+    }
+    val bridgeName = bridge.name.toJavaScriptString()
+    val queryFunction = queryFunction.toJavaScriptString()
+    return """
+      (function() {
+        if (window.location.protocol !== 'https:' || !($hostExpression)) return;
+        var query = window[$queryFunction];
+        if (typeof query !== 'function') return;
+        try {
+          Object.defineProperty(window, $bridgeName, {
+            value: Object.freeze({
+              postMessage: function(method, payload) {
+                return new Promise(function(resolve, reject) {
+                  query({
+                    request: encodeURIComponent(String(method)) + ':' +
+                      encodeURIComponent(payload == null ? '' : String(payload)),
+                    persistent: false,
+                    onSuccess: function(response) {
+                      try { resolve(JSON.parse(response)); }
+                      catch (_) { reject(new Error('invalid_bridge_response')); }
+                    },
+                    onFailure: function(code, message) {
+                      reject(new Error(message || ('bridge_error_' + code)));
+                    }
+                  });
+                });
+              }
+            }),
+            enumerable: false,
+            writable: false,
+            configurable: false
+          });
+        } catch (_) {}
+      })();
+    """.trimIndent()
+  }
+
+  companion object {
+    private val bridgeNamePattern = Regex("[A-Za-z_$][A-Za-z0-9_$]*")
+
+    /** 校验桥名称和主机名，拒绝通配符、端口及非 ASCII 来源。 */
+    fun create(bridges: List<ScriptBridge>): List<DesktopScriptBridgeConfiguration> {
+      val bridgeNames = mutableSetOf<String>()
+      return bridges.map { bridge ->
+        require(bridgeNamePattern.matches(bridge.name)) {
+          "JS 桥名称必须是 ASCII JavaScript 标识符：${bridge.name}"
+        }
+        require(bridgeNames.add(bridge.name)) {
+          "JS 桥名称不能重复：${bridge.name}"
+        }
+        require(bridge.allowedHosts.isNotEmpty()) {
+          "JS 桥必须声明至少一个受信任主机：${bridge.name}"
+        }
+        val allowedHosts = bridge.allowedHosts.mapTo(linkedSetOf()) { host ->
+          require(isValidHost(host)) {
+            "JS 桥只允许精确 ASCII 主机名且不支持通配符：$host"
+          }
+          host.lowercase()
+        }
+        DesktopScriptBridgeConfiguration(
+          bridge = bridge,
+          queryFunction = "__multiweb_query_${bridge.name}",
+          allowedHosts = allowedHosts,
+        )
+      }
+    }
+
+    private fun isValidHost(host: String): Boolean {
+      if (
+        host.isBlank() || host != host.trim() || host.any { it.code > 0x7f } ||
+        host.any { it in "*/:?#@'\\\"" }
+      ) {
+        return false
+      }
+      val normalizedHost = host.lowercase()
+      val parsedHost = runCatching { URI("https://$normalizedHost").host }.getOrNull()
+      return parsedHost == normalizedHost
+    }
+  }
+}
+
+/** 管理 Desktop 桥的 JCEF 路由、处理器和注入生命周期。 */
+internal class DesktopScriptBridgeInstallation private constructor(
+  private val client: CefClient?,
+  private val bindings: List<Binding>,
+  private val configurations: List<DesktopScriptBridgeConfiguration>,
+) {
+  /** 在主文档开始加载时只向受信任页面注入对应桥对象。 */
+  fun inject(frame: CefFrame) {
+    if (!frame.isMain) {
+      return
+    }
+    configurations
+      .filter { configuration -> configuration.isAllowedUrl(frame.url) }
+      .forEach { configuration ->
+        frame.executeJavaScript(configuration.injectionScript(), "multiweb://bridge", 0)
+      }
+  }
+
+  /** 从客户端移除并销毁所有路由，确保浏览器关闭后不再收到脚本回调。 */
+  fun dispose() {
+    bindings.forEach { binding ->
+      client?.removeMessageRouter(binding.router)
+      binding.router.removeHandler(binding.handler)
+      binding.router.dispose()
+    }
+  }
+
+  private data class Binding(
+    val router: CefMessageRouter,
+    val handler: DesktopScriptBridgeHandler,
+  )
+
+  companion object {
+    /** 在 JCEF 客户端注册桥路由；JavaScript 关闭或无桥时返回空安装。 */
+    fun install(
+      client: CefClient,
+      enabled: Boolean,
+      bridges: List<ScriptBridge>,
+    ): DesktopScriptBridgeInstallation {
+      if (!enabled || bridges.isEmpty()) {
+        return DesktopScriptBridgeInstallation(null, emptyList(), emptyList())
+      }
+      val configurations = DesktopScriptBridgeConfiguration.create(bridges)
+      val bindings = configurations.map { configuration ->
+        val handler = DesktopScriptBridgeHandler(configuration)
+        val router = CefMessageRouter.create(
+          CefMessageRouter.CefMessageRouterConfig(
+            configuration.queryFunction,
+            "${configuration.queryFunction}Cancel",
+          ),
+          handler,
+        )
+        client.addMessageRouter(router)
+        Binding(router, handler)
+      }
+      return DesktopScriptBridgeInstallation(client, bindings, configurations)
+    }
+  }
+}
+
+/** 在 JCEF UI 线程处理查询，并在原生侧再次执行来源校验。 */
+internal class DesktopScriptBridgeHandler(
+  private val configuration: DesktopScriptBridgeConfiguration,
+) : CefMessageRouterHandlerAdapter() {
+  override fun onQuery(
+    browser: CefBrowser,
+    frame: CefFrame,
+    queryId: Long,
+    request: String,
+    persistent: Boolean,
+    callback: CefQueryCallback,
+  ): Boolean {
+    if (!frame.isMain || !configuration.isAllowedUrl(frame.url)) {
+      callback.failure(403, "untrusted_origin")
+      return true
+    }
+    val call = request.toScriptBridgeCall()
+    if (call == null) {
+      callback.failure(400, "invalid_request")
+      return true
+    }
+    val response = runCatching { configuration.bridge.handle(call) }
+      .getOrElse { ScriptBridgeResponse(isSuccess = false, errorCode = "bridge_exception") }
+      ?: ScriptBridgeResponse(isSuccess = true)
+    callback.success(response.toJson())
+    return true
+  }
+
+  private fun String.toScriptBridgeCall(): ScriptBridgeCall? {
+    val separatorIndex = indexOf(':')
+    if (separatorIndex <= 0) {
+      return null
+    }
+    val method = decodePercentEncodedUtf8(substring(0, separatorIndex)) ?: return null
+    val payload = decodePercentEncodedUtf8(substring(separatorIndex + 1)) ?: return null
+    return method.takeIf(String::isNotBlank)?.let { ScriptBridgeCall(it, payload) }
+  }
+
+  private fun decodePercentEncodedUtf8(value: String): String? {
+    return runCatching {
+      URLDecoder.decode(value, StandardCharsets.UTF_8)
+    }.getOrNull()
+  }
+
+  private fun ScriptBridgeResponse.toJson(): String {
+    return """{"isSuccess":$isSuccess,"payload":${payload.toJavaScriptString()},"errorCode":${errorCode.toJsonValue()}}"""
+  }
+
+  private fun String?.toJsonValue(): String = this?.toJavaScriptString() ?: "null"
+}
+
+/** 生成安全的 JavaScript/JSON 字符串字面量，避免桥响应内容破坏脚本上下文。 */
+private fun String.toJavaScriptString(): String {
+  return buildString(length + 2) {
+    append('"')
+    for (character in this@toJavaScriptString) {
+      when (character) {
+        '\\' -> append("\\\\")
+        '"' -> append("\\\"")
+        '\b' -> append("\\b")
+        '\u000C' -> append("\\f")
+        '\n' -> append("\\n")
+        '\r' -> append("\\r")
+        '\t' -> append("\\t")
+        else -> if (character.code < 0x20) {
+          append("\\u%04x".format(character.code))
+        } else {
+          append(character)
+        }
+      }
+    }
+    append('"')
+  }
+}

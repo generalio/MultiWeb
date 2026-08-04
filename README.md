@@ -35,9 +35,11 @@ iOS 模块应添加到 KMP 的 `iosMain` source set。桌面模块依赖 JCEF �
 JS/Wasm 使用 `webview-browser`。该模块按导航策略在浏览器新标签页或新窗口中打开 URL，不提供嵌入式
 WebView 或浏览器全局会话清理能力。
 
-Android 控制器可通过 `extensions` 安装页面事件、下载、长按上下文操作与受信任域名 JS 桥；通过
-`webViewFactory` 注入业务自定义 `WebView` 子类。控制器始终自行组合安全导航与原生 Client，业务代码
-不得覆盖 `WebViewClient`、`WebChromeClient` 或使用 `addJavascriptInterface` 暴露桥对象。
+Android 与 Desktop 控制器均可通过 `extensions` 安装页面事件、下载、上下文操作与受信任域名 JS 桥。
+Desktop 使用 JCEF `CefMessageRouter`，桥对象仅注入 HTTPS 精确主机名页面，并在原生回调中再次校验来源；
+释放控制器时会先注销桥路由，再关闭浏览器。Android 可额外通过 `webViewFactory` 注入业务自定义 `WebView`
+子类。控制器始终自行组合安全导航与原生 Client，业务代码不得覆盖 `WebViewClient`、`WebChromeClient` 或使用
+`addJavascriptInterface` 暴露桥对象。
 
 发布和仓库配置见 [发布说明](docs/publishing.md)。
 

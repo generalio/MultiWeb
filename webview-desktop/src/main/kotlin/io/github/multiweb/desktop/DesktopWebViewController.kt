@@ -9,6 +9,12 @@ import io.github.multiweb.api.WebRequest
 import io.github.multiweb.api.WebViewConfig
 import io.github.multiweb.api.WebViewController
 import io.github.multiweb.api.WebViewState
+import io.github.multiweb.extension.DownloadRequest
+import io.github.multiweb.extension.PageErrorEvent
+import io.github.multiweb.extension.PageFinishedEvent
+import io.github.multiweb.extension.PageStartedEvent
+import io.github.multiweb.extension.WebContextAction
+import io.github.multiweb.extension.WebViewExtension
 import java.awt.Component
 import java.util.concurrent.ConcurrentHashMap
 import javax.swing.SwingUtilities
@@ -17,7 +23,10 @@ import org.cef.CefClient
 import org.cef.browser.CefBrowser
 import org.cef.browser.CefFrame
 import org.cef.callback.CefCompletionCallback
+import org.cef.callback.CefContextMenuParams
+import org.cef.handler.CefContextMenuHandlerAdapter
 import org.cef.handler.CefDisplayHandlerAdapter
+import org.cef.handler.CefDownloadHandlerAdapter
 import org.cef.handler.CefLoadHandler
 import org.cef.handler.CefLoadHandlerAdapter
 import org.cef.handler.CefLifeSpanHandlerAdapter
@@ -46,6 +55,8 @@ class DesktopWebViewController(
   navigationPolicy: NavigationPolicy,
   /** 当策略要求外部处理时由宿主执行的操作。 */
   private val onExternalNavigation: (NavigationRequest) -> Unit = {},
+  /** 可选的平台能力扩展；事件按列表顺序派发。 */
+  private val extensions: List<WebViewExtension> = emptyList(),
   /** 浏览器原生关闭且 JCEF 客户端已释放后通知宿主，可用于安全销毁进程级 [CefApp]。 */
   private val onBrowserClosed: () -> Unit = {},
 ) : WebViewController {
@@ -58,6 +69,8 @@ class DesktopWebViewController(
   private var pendingInitialRequest: WebRequest? = null
   private val client: CefClient
   private val browser: CefBrowser
+  /** 与当前 CefClient 同生命周期的 JS 桥路由安装。 */
+  private val scriptBridgeInstallation: DesktopScriptBridgeInstallation
 
   /** 原生浏览器是否已完成创建；JCEF 的请求接口在此之前不能可靠执行。 */
   @Volatile
@@ -93,6 +106,11 @@ class DesktopWebViewController(
     }
 
     client = cefApp.createClient().also(::configureClient)
+    scriptBridgeInstallation = DesktopScriptBridgeInstallation.install(
+      client = client,
+      enabled = config.javaScriptEnabled,
+      bridges = extensions.flatMap(WebViewExtension::scriptBridges),
+    )
     browser = client.createBrowser("about:blank", false, false)
     view = browser.uiComponent
     // Compose 的 SwingPanel 不保证触发 JCEF 所需的首次 Swing 绘制；主动创建可避免原生视图保持空白。
@@ -159,6 +177,7 @@ class DesktopWebViewController(
     pendingInitialRequest = null
     pendingProgrammaticMainFrameUrls.clear()
     pendingProgrammaticMainFrameHeaders.clear()
+    scriptBridgeInstallation.dispose()
     browser.stopLoad()
     browser.close(true)
     state = state.copy(isLoading = false)
@@ -168,6 +187,10 @@ class DesktopWebViewController(
     client.addRequestHandler(createRequestHandler())
     client.addLoadHandler(createLoadHandler())
     client.addDisplayHandler(createDisplayHandler())
+    if (extensions.isNotEmpty()) {
+      client.addDownloadHandler(createDownloadHandler())
+      client.addContextMenuHandler(createContextMenuHandler())
+    }
     client.addLifeSpanHandler(createLifeSpanHandler())
   }
 
@@ -400,6 +423,8 @@ class DesktopWebViewController(
             loadingProgress = 0f,
             error = null,
           )
+          extensions.forEach { extension -> extension.onPageStarted(PageStartedEvent(frame.url)) }
+          scriptBridgeInstallation.inject(frame)
         }
       }
 
@@ -412,6 +437,9 @@ class DesktopWebViewController(
             canGoBack = browser.canGoBack(),
             canGoForward = browser.canGoForward(),
           )
+          extensions.forEach { extension ->
+            extension.onPageFinished(PageFinishedEvent(frame.url, state.title))
+          }
         }
       }
 
@@ -441,19 +469,76 @@ class DesktopWebViewController(
     }
   }
 
+  /** 将 JCEF 下载事件转换为跨平台扩展事件，并交由 JCEF 使用默认路径继续下载。 */
+  private fun createDownloadHandler(): CefDownloadHandlerAdapter {
+    return object : CefDownloadHandlerAdapter() {
+      override fun onBeforeDownload(
+        browser: CefBrowser,
+        downloadItem: org.cef.callback.CefDownloadItem,
+        suggestedName: String,
+        callback: org.cef.callback.CefBeforeDownloadCallback,
+      ): Boolean {
+        extensions.forEach { extension ->
+          extension.onDownloadRequested(
+            DownloadRequest(
+              url = downloadItem.url,
+              suggestedFileName = suggestedName,
+              mimeType = downloadItem.mimeType,
+              contentLength = downloadItem.totalBytes.takeIf { it >= 0L },
+            ),
+          )
+        }
+        callback.Continue("", false)
+        return true
+      }
+    }
+  }
+
+  /** 将链接和图片上下文菜单转换为扩展事件，同时保留 JCEF 默认菜单。 */
+  private fun createContextMenuHandler(): CefContextMenuHandlerAdapter {
+    return object : CefContextMenuHandlerAdapter() {
+      override fun onBeforeContextMenu(
+        browser: CefBrowser,
+        frame: CefFrame,
+        params: CefContextMenuParams,
+        model: org.cef.callback.CefMenuModel,
+      ) {
+        val typeFlags = params.typeFlags
+        if (
+          typeFlags and CefContextMenuParams.TypeFlags.CM_TYPEFLAG_LINK != 0 &&
+          params.mediaType != CefContextMenuParams.MediaType.CM_MEDIATYPE_IMAGE
+        ) {
+          params.linkUrl.takeIf(String::isNotBlank)?.let { url ->
+            extensions.forEach { extension -> extension.onContextAction(WebContextAction.LinkLongPressed(url)) }
+          }
+        }
+        if (
+          params.mediaType == CefContextMenuParams.MediaType.CM_MEDIATYPE_IMAGE &&
+          params.sourceUrl.isNotBlank()
+        ) {
+          extensions.forEach { extension ->
+            extension.onContextAction(WebContextAction.ImageLongPressed(params.sourceUrl))
+          }
+        }
+      }
+    }
+  }
+
   private fun updateError(
     category: WebErrorCategory,
     description: String,
     failingUrl: String?,
   ) {
+    val error = WebError(
+      category = category,
+      description = description,
+      failingUrl = failingUrl,
+    )
     state = state.copy(
       isLoading = false,
-      error = WebError(
-        category = category,
-        description = description,
-        failingUrl = failingUrl,
-      ),
+      error = error,
     )
+    extensions.forEach { extension -> extension.onPageError(PageErrorEvent(error)) }
   }
 
   private fun CefLoadHandler.ErrorCode.toWebErrorCategory(): WebErrorCategory {
