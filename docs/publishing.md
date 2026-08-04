@@ -61,7 +61,7 @@ gpg --export-secret-keys --armor <密钥ID>
 | `SIGNING_KEY` | 完整 ASCII 装甲 GPG 私钥 |
 | `SIGNING_PASSWORD` | GPG 私钥口令；无口令私钥可不配置 |
 
-推送符合 `vX.Y.Z` 格式的标签后，GitHub Packages 工作流始终执行；Maven Central 工作流只有在前三项必需 Secret 全部存在时才会执行。`SIGNING_PASSWORD` 仅在私钥设有口令时需要。Central 构件上传、校验与正式发布由 Central Portal 自动完成，索引生效通常需要数分钟。
+推送严格符合 `vX.Y.Z` 格式的正式标签后，GitHub Packages 工作流始终执行；Maven Central 工作流只有在前三项必需 Secret 全部存在时才会执行。预发布标签不会触发发布工作流。`SIGNING_PASSWORD` 仅在私钥设有口令时需要。Central 构件上传、校验与正式发布由 Central Portal 自动完成，索引生效通常需要数分钟。
 
 ## 本地发布验证
 
