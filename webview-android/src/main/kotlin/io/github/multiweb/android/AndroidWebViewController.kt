@@ -4,6 +4,7 @@ import android.content.Context
 import android.net.http.SslError
 import android.os.Build
 import android.os.Looper
+import android.view.View
 import android.webkit.CookieManager
 import android.webkit.RenderProcessGoneDetail
 import android.webkit.SslErrorHandler
@@ -169,6 +170,9 @@ class AndroidWebViewController(
   }
 
   private fun configureWebView(webView: WebView) {
+    // 部分厂商 WebView 在 Compose AndroidView 中使用硬件层时会忽略宿主偏移，覆盖整个窗口。
+    // 使用软件层保证其绘制边界始终遵循 Compose 测量结果，避免页面与宿主控件错位。
+    webView.setLayerType(View.LAYER_TYPE_SOFTWARE, null)
     with(webView.settings) {
       javaScriptEnabled = config.javaScriptEnabled
       javaScriptCanOpenWindowsAutomatically = false

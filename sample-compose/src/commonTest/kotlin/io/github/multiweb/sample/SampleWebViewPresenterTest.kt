@@ -12,6 +12,18 @@ import kotlin.test.assertTrue
 
 class SampleWebViewPresenterTest {
   @Test
+  fun `首次加载使用预置示例地址`() {
+    val controller = FakeWebViewController()
+    val presenter = SampleWebViewPresenter(controller)
+
+    presenter.loadInitialPage()
+
+    val operation = assertIs<FakeWebViewOperation.Load>(controller.operations.single())
+    assertEquals(DefaultSampleUrl, operation.request.url)
+    assertEquals(DefaultSampleUrl, presenter.uiState.webViewState.url)
+  }
+
+  @Test
   fun `加载操作使用地址栏输入并更新页面状态`() {
     val controller = FakeWebViewController()
     val presenter = SampleWebViewPresenter(controller)

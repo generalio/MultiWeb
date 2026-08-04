@@ -21,8 +21,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.unit.dp
 import io.github.multiweb.api.WebViewController
-import io.github.multiweb.sample.generated.resources.Res
 import io.github.multiweb.sample.generated.resources.NotoSansCJKsc_Regular
+import io.github.multiweb.sample.generated.resources.Res
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 import org.jetbrains.compose.resources.Font
@@ -53,6 +53,8 @@ internal fun SampleWebViewScreen(
   var uiState by remember(controller) { mutableStateOf(presenter.uiState) }
 
   LaunchedEffect(presenter) {
+    presenter.loadInitialPage()
+    uiState = presenter.uiState
     while (isActive) {
       delay(250)
       if (presenter.refreshState()) {

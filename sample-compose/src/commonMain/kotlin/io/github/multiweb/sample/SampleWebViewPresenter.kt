@@ -45,6 +45,9 @@ internal class SampleWebViewPresenter(
     controller.load(WebRequest(uiState.urlInput.trim()))
   }
 
+  /** 首次展示示例时加载预置地址，避免原生 WebView 因未收到导航请求而呈现空白内容。 */
+  fun loadInitialPage() = load()
+
   /** 请求原生控制器刷新当前页面。 */
   fun reload() = runControllerAction(controller::reload)
 
