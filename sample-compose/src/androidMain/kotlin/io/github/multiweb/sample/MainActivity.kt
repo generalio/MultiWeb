@@ -2,10 +2,14 @@ package io.github.multiweb.sample
 
 import android.os.Bundle
 import androidx.activity.ComponentActivity
+import androidx.activity.compose.BackHandler
 import androidx.activity.compose.setContent
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.lifecycle.DefaultLifecycleObserver
@@ -26,7 +30,13 @@ class MainActivity : ComponentActivity() {
           navigationPolicy = DefaultNavigationPolicy,
         )
       }
+      var canGoBack by remember(controller) { mutableStateOf(controller.state.canGoBack) }
       val lifecycleOwner = this
+
+      // 仅在存在网页历史时拦截系统返回键；无历史时交回 Activity 的默认退出逻辑。
+      BackHandler(enabled = canGoBack) {
+        controller.goBack()
+      }
 
       DisposableEffect(controller, lifecycleOwner) {
         val observer = object : DefaultLifecycleObserver {
@@ -45,7 +55,12 @@ class MainActivity : ComponentActivity() {
         }
       }
 
-      SampleWebViewScreen(controller) {
+      SampleWebViewScreen(
+        controller = controller,
+        onWebViewStateChanged = { state ->
+          canGoBack = state.canGoBack
+        },
+      ) {
         AndroidView(
           factory = { controller.view },
           modifier = Modifier.fillMaxSize(),

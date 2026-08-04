@@ -8,6 +8,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.Button
+import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
@@ -19,8 +20,10 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import io.github.multiweb.api.WebViewController
+import io.github.multiweb.api.WebViewState
 import io.github.multiweb.sample.generated.resources.NotoSansCJKsc_Regular
 import io.github.multiweb.sample.generated.resources.Res
 import kotlinx.coroutines.delay
@@ -41,11 +44,14 @@ private fun sampleFontFamily(): FontFamily = FontFamily(
 /**
  * 用于手动验证 MultiWeb 各平台实现的 Compose 示例界面。
  *
- * [webViewContent] 由平台入口提供，确保公共界面不依赖 Android View、UIKit 或 Swing 类型。
+ * [webViewContent] 由平台入口提供，确保公共界面不依赖 Android View、UIKit 或 Swing 类型；
+ * [onWebViewStateChanged] 仅向平台宿主暴露状态快照，用于接入 Android 系统返回键等宿主级操作，
+ * 不参与控制器的导航或生命周期管理。
  */
 @Composable
 internal fun SampleWebViewScreen(
   controller: WebViewController,
+  onWebViewStateChanged: (WebViewState) -> Unit = {},
   webViewContent: @Composable () -> Unit,
 ) {
   val sampleFontFamily = sampleFontFamily()
@@ -61,6 +67,10 @@ internal fun SampleWebViewScreen(
         uiState = presenter.uiState
       }
     }
+  }
+
+  LaunchedEffect(uiState.webViewState) {
+    onWebViewStateChanged(uiState.webViewState)
   }
 
   MaterialTheme(
@@ -82,6 +92,27 @@ internal fun SampleWebViewScreen(
         .padding(12.dp),
       verticalArrangement = Arrangement.spacedBy(8.dp),
     ) {
+      Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+      ) {
+        Button(
+          enabled = uiState.webViewState.canGoBack,
+          onClick = {
+            presenter.goBack()
+            uiState = presenter.uiState
+          },
+        ) {
+          Text("返回")
+        }
+        Text(
+          text = samplePageTitle(uiState.webViewState),
+          modifier = Modifier.weight(1f),
+          style = MaterialTheme.typography.titleMedium,
+          maxLines = 1,
+          overflow = TextOverflow.Ellipsis,
+        )
+      }
       OutlinedTextField(
         value = uiState.urlInput,
         onValueChange = { url ->
@@ -124,10 +155,13 @@ internal fun SampleWebViewScreen(
       Row(
         horizontalArrangement = Arrangement.spacedBy(8.dp),
       ) {
-        Button(onClick = {
-          presenter.stopLoading()
-          uiState = presenter.uiState
-        }) {
+        Button(
+          enabled = uiState.webViewState.isLoading,
+          onClick = {
+            presenter.stopLoading()
+            uiState = presenter.uiState
+          },
+        ) {
           Text("停止")
         }
         Button(onClick = {
@@ -147,6 +181,12 @@ internal fun SampleWebViewScreen(
         Text(
           text = "页面错误：${error.description}",
           color = MaterialTheme.colorScheme.error,
+        )
+      }
+      if (uiState.webViewState.isLoading) {
+        LinearProgressIndicator(
+          progress = { uiState.webViewState.loadingProgress },
+          modifier = Modifier.fillMaxWidth(),
         )
       }
       Text("当前地址：${uiState.webViewState.url ?: "未加载"}")

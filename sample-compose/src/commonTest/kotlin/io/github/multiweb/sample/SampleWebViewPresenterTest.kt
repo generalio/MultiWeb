@@ -1,6 +1,7 @@
 package io.github.multiweb.sample
 
 import io.github.multiweb.api.WebRequest
+import io.github.multiweb.api.WebViewState
 import io.github.multiweb.testing.FakeWebViewController
 import io.github.multiweb.testing.FakeWebViewOperation
 import kotlin.test.Test
@@ -11,6 +12,13 @@ import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
 class SampleWebViewPresenterTest {
+  @Test
+  fun `页面标题为空时使用默认标题`() {
+    assertEquals(DefaultSamplePageTitle, samplePageTitle(WebViewState()))
+    assertEquals(DefaultSamplePageTitle, samplePageTitle(WebViewState(title = "   ")))
+    assertEquals("示例页面", samplePageTitle(WebViewState(title = "示例页面")))
+  }
+
   @Test
   fun `首次加载使用预置示例地址`() {
     val controller = FakeWebViewController()
