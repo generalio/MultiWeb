@@ -37,12 +37,23 @@
 
 ## 修改流程
 
-1. 阅读根目录 `AGENTS.md`，确认模块边界、中文注释、缩进和测试要求。
-2. 先在公共 API 或对应平台模块添加失败测试，复现要修复的问题。
-3. 以最小范围实现修复；公共 API、关键字段和非显然安全约束同步添加或更新中文 KDoc。
-4. 先运行受影响模块的测试，再运行 `apiCheck` 和受影响平台编译。
-5. 检查 `git diff --check` 与 `git status --short`，确认未包含构建产物、凭据或无关改动。
-6. 一个完成且验证过的阶段对应一个独立 commit。
+1. 从最新 `main` 创建 `generalio/<类型>/<主题>` 分支，例如 `generalio/feature/script-bridge`；类型仅可为
+   `feature`、`fix`、`docs`、`chore`、`refactor` 或 `test`。
+2. 阅读根目录 `AGENTS.md`，确认模块边界、中文注释、缩进和测试要求。
+3. 先在公共 API 或对应平台模块添加失败测试，复现要修复的问题。
+4. 以最小范围实现修复；公共 API、关键字段和非显然安全约束同步添加或更新中文 KDoc。
+5. 先运行受影响模块的测试，再运行 `apiCheck` 和受影响平台编译。
+6. 检查 `git diff --check` 与 `git status --short`，确认未包含构建产物、凭据或无关改动。
+7. 一个完成且验证过的阶段对应一个独立 commit；推送分支并创建合并到 `main` 的 PR。
+8. 完整填写 PR 模板中的开发记录，等待所有必需 CI 检查通过和审查批准后合并；禁止直接推送 `main`。
+
+创建开发分支的示例：
+
+```shell
+git switch main
+git pull --ff-only origin main
+git switch -c generalio/feature/script-bridge
+```
 
 ## 格式与文档
 
@@ -64,6 +75,17 @@ Kotlin 和 Gradle Kotlin DSL 使用空格缩进：Tab size 为 2、Indent 为 2�
 | 公共 API | `apiCheck`。 |
 
 `webview-test-fixtures` 仅支持仓库内测试与示例，不能作为对外依赖或发布测试覆盖率的替代品。
+
+GitHub Actions 会在以 `main` 为目标分支的 PR 和 `main` 推送时执行以下最低校验：
+
+```shell
+./gradlew apiCheck :webview-android:assembleRelease :webview-desktop:check \
+  :sample-compose:linkDebugFrameworkIosSimulatorArm64 :sample-compose:compileKotlinJs \
+  :sample-compose:compileKotlinWasmJs --no-parallel -Dorg.gradle.jvmargs=-Xmx2g
+```
+
+该校验不替代 Android/iOS 真机或模拟器运行时测试，也不替代 JS/Wasm 浏览器运行时验证。无法执行的运行时测试
+必须写入 PR 的“验证命令与结果”章节。
 
 ## 版本与发布
 

@@ -2,9 +2,17 @@
 
 ## 开始前
 
-1. Fork 本仓库并从 `main` 创建主题分支，例如 `fix/android-navigation` 或 `feat/desktop-download`。
+1. Fork 本仓库后，从最新 `main` 创建 `generalio/<类型>/<主题>` 分支，例如
+   `generalio/fix/android-navigation` 或 `generalio/feature/desktop-download`。类型仅可为 `feature`、`fix`、
+   `docs`、`chore`、`refactor` 或 `test`。
 2. 阅读 [架构说明](architecture.md)、[开发指南](development.md) 和根目录 `AGENTS.md`。
 3. 先搜索现有 Issue 和代码，避免重复实现或将平台细节加入公共模块。
+
+```shell
+git switch main
+git pull --ff-only origin main
+git switch -c generalio/fix/android-navigation
+```
 
 ## 二次开发原则
 
@@ -43,7 +51,8 @@ git status --short
 
 ## Pull Request
 
-PR 描述应包含以下信息：
+所有改动必须通过 PR 合并到 `main`，禁止直接推送。PR 正文是该改动的完整开发记录，必须使用仓库提供的模板，
+并完整填写以下章节：
 
 ```md
 ## 目的
@@ -59,10 +68,31 @@ PR 描述应包含以下信息：
 ## 验证命令与结果
 
 ## 风险与兼容性
+
+## 文档变更
 ```
+
+“验证命令与结果”必须记录实际执行的命令、结果和未执行项的原因；“文档变更”必须列出更新的 README、`docs/`
+或中文 KDoc。无对应改动时应明确说明原因，不得留空。
 
 若改动涉及安全策略、JS 桥、Cookie、文件访问或外部导航，必须补充默认行为、受影响平台与安全评估。
 若无法在本机运行某项真实运行时测试，应在 PR 中说明原因和已执行的替代验证。
+
+合并前必须满足：源分支命名通过 `PR 治理校验`、PR 开发记录完整、`构建校验` 通过、所有审查会话已解决，
+且至少获得一名维护者批准。PR 创建后如有新的提交，应重新确认 CI 和审查结论。
+
+## 仓库管理员配置
+
+仓库文件只能定义 CI，无法阻止拥有直接推送权限的账号绕过流程。首次合入本变更后，管理员应在 GitHub 的
+`Settings` -> `Rules` -> `Rulesets` 为默认分支 `main` 创建规则集，并启用：
+
+- Require a pull request before merging，至少 1 个批准，并在新提交后撤销过期批准。
+- Require status checks to pass，选择首次运行后显示的 `PR 治理校验 / 分支与开发记录` 与
+  `构建校验 / 多平台构建校验`，并要求分支在合并前保持最新。
+- Require conversation resolution，禁止 force push 和删除分支规则。
+- Do not allow bypassing the above settings，确保管理员也不能直接绕过 PR 与 CI 门禁。
+
+未完成规则集配置前，维护者必须人工执行同等要求，不得直接向 `main` 推送。
 
 ## 审查标准
 

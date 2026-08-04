@@ -1,0 +1,61 @@
+name: PR 治理校验
+
+on:
+  pull_request:
+    branches:
+      - main
+    types:
+      - opened
+      - edited
+      - reopened
+      - ready_for_review
+      - synchronize
+
+permissions:
+  contents: read
+  pull-requests: read
+
+jobs:
+  governance:
+    name: 分支与开发记录
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: 校验分支命名与 PR 开发记录
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const branch = context.payload.pull_request.head.ref;
+            const body = context.payload.pull_request.body || "";
+            const branchPattern = /^generalio\/(feature|fix|docs|chore|refactor|test)\/[a-z0-9]+(?:-[a-z0-9]+)*$/;
+            const requiredSections = [
+              "目的",
+              "改动内容",
+              "平台影响",
+              "验证命令与结果",
+              "风险与兼容性",
+              "文档变更",
+            ];
+
+            if (!branchPattern.test(branch)) {
+              core.setFailed(
+                `源分支必须匹配 generalio/<类型>/<主题>，当前为：${branch}。允许的类型：feature、fix、docs、chore、refactor、test。`,
+              );
+              return;
+            }
+
+            const headings = [...body.matchAll(/^##\s+(.+?)\s*$/gm)];
+            const sections = new Map(
+              headings.map((heading, index) => [
+                heading[1].trim(),
+                body
+                  .slice(heading.index + heading[0].length, headings[index + 1]?.index)
+                  .replace(/<!--(?:.|\n)*?-->/g, "")
+                  .trim(),
+              ]),
+            );
+            const missingSections = requiredSections.filter((section) => !sections.get(section));
+
+            if (missingSections.length > 0) {
+              core.setFailed(`PR 开发记录缺少或未填写章节：${missingSections.join("、")}。请使用 PR 模板完整说明。`);
+            }
