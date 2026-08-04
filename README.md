@@ -22,10 +22,10 @@ WKWebView 与桌面 JCEF 实现；跨平台模型和导航策略位于 `webview-
 
 ```kotlin
 dependencies {
-  implementation("io.github.multiweb:webview-api:<version>")
-  implementation("io.github.multiweb:webview-extension-api:<version>")
-  implementation("io.github.multiweb:webview-android:<version>")
-  implementation("io.github.multiweb:webview-desktop:<version>")
+  implementation("io.github.generalio.multiweb:webview-api:<version>")
+  implementation("io.github.generalio.multiweb:webview-extension-api:<version>")
+  implementation("io.github.generalio.multiweb:webview-android:<version>")
+  implementation("io.github.generalio.multiweb:webview-desktop:<version>")
 }
 ```
 

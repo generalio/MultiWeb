@@ -8,8 +8,11 @@
 ./gradlew publishToMavenLocal
 ```
 
-使用方加入 `mavenLocal()` 后，即可使用 `io.github.multiweb` 下的各模块坐标。当前版本由
+使用方加入 `mavenLocal()` 后，即可使用 `io.github.generalio.multiweb` 下的各模块坐标。当前版本由
 `VERSION_NAME` 决定。
+
+发布坐标已从 `io.github.multiweb` 迁移至 `io.github.generalio.multiweb`。旧坐标下已经发布的版本不会
+被重命名，使用方升级到新版本时需要同步更新依赖声明。
 
 ## GitHub Packages 自动发布
 
