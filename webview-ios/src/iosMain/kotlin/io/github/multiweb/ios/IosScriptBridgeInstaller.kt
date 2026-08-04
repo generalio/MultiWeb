@@ -17,7 +17,8 @@ import platform.darwin.NSObject
  * WebKit 的基础消息处理器不能可靠地把 Kotlin 调用结果同步回传给网页，因此本实现仅保证命令已交给
  * [ScriptBridge.handle] 处理，不会伪造
  * [io.github.multiweb.extension.ScriptBridgeResponse] 已送达。桥同时通过 document-start 脚本和原生消息
- * 入口校验 HTTPS 精确主机名，避免未受信任页面获得原生能力。
+ * 入口校验 HTTPS 精确主机名，避免未受信任页面获得原生能力。页面可继续使用
+ * `postMessage(method, payload)`，也可传入包含 `method`、`payload` 字段的单个 JSON 字符串以与 Android 统一。
  */
 @OptIn(ExperimentalForeignApi::class)
 internal object IosScriptBridgeInstaller {
@@ -81,9 +82,21 @@ internal data class IosScriptBridgeConfiguration(
         try {
           Object.defineProperty(window, '${bridge.name}', {
             value: Object.freeze({
-              postMessage: function(method, payload) {
-                handler.postMessage(encodeURIComponent(String(method)) + ':' +
-                  encodeURIComponent(payload == null ? '' : String(payload)));
+              postMessage: function(requestOrMethod, payload) {
+                var method = requestOrMethod;
+                var requestPayload = payload;
+                if (arguments.length === 1 && typeof requestOrMethod === 'string') {
+                  try {
+                    var request = JSON.parse(requestOrMethod);
+                    if (request && typeof request.method === 'string') {
+                      method = request.method;
+                      requestPayload = request.payload;
+                    }
+                  } catch (_) {}
+                }
+                if (typeof method !== 'string' || method.length === 0) return;
+                handler.postMessage(encodeURIComponent(method) + ':' +
+                  encodeURIComponent(requestPayload == null ? '' : String(requestPayload)));
               }
             }),
             enumerable: false,

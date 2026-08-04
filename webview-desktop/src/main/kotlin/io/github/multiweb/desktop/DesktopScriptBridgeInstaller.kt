@@ -33,7 +33,12 @@ internal data class DesktopScriptBridgeConfiguration(
       parsed.host?.lowercase() in allowedHosts
   }
 
-  /** 仅在受信任主文档中定义桥对象，桥请求通过 CEF 异步查询回传 Promise。 */
+  /**
+   * 仅在受信任主文档中定义桥对象，桥请求通过 CEF 异步查询回传 Promise。
+   *
+   * 同时兼容 `postMessage(method, payload)` 和单参数 JSON 字符串，后者可与 Android 的 Web Message Listener
+   * 共用同一段网页脚本。
+   */
   fun injectionScript(): String {
     val hostExpression = allowedHosts.joinToString(" || ") { host ->
       "window.location.hostname === ${host.toJavaScriptString()}"
@@ -48,11 +53,23 @@ internal data class DesktopScriptBridgeConfiguration(
         try {
           Object.defineProperty(window, $bridgeName, {
             value: Object.freeze({
-              postMessage: function(method, payload) {
+              postMessage: function(requestOrMethod, payload) {
+                var method = requestOrMethod;
+                var requestPayload = payload;
+                if (arguments.length === 1 && typeof requestOrMethod === 'string') {
+                  try {
+                    var request = JSON.parse(requestOrMethod);
+                    if (request && typeof request.method === 'string') {
+                      method = request.method;
+                      requestPayload = request.payload;
+                    }
+                  } catch (_) {}
+                }
+                if (typeof method !== 'string' || method.length === 0) return;
                 return new Promise(function(resolve, reject) {
                   query({
-                    request: encodeURIComponent(String(method)) + ':' +
-                      encodeURIComponent(payload == null ? '' : String(payload)),
+                    request: encodeURIComponent(method) + ':' +
+                      encodeURIComponent(requestPayload == null ? '' : String(requestPayload)),
                     persistent: false,
                     onSuccess: function(response) {
                       try { resolve(JSON.parse(response)); }

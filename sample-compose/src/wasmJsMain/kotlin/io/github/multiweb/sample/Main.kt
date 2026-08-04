@@ -17,6 +17,9 @@ fun main() {
     DisposableEffect(controller) {
       onDispose(controller::dispose)
     }
-    SampleWebViewScreen(controller) {}
+    SampleWebViewScreen(
+      controller = controller,
+      hostCapabilityNotice = "当前浏览器新窗口模式不支持原生全屏和图片保存桥。",
+    ) {}
   }
 }

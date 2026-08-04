@@ -26,6 +26,7 @@ class DesktopScriptBridgeConfigurationTest {
     assertEquals(false, configuration.isAllowedUrl("https://evil.example.com/page"))
     assertContains(configuration.injectionScript(), "__multiweb_query_multiWeb")
     assertContains(configuration.injectionScript(), "window.location.hostname")
+    assertContains(configuration.injectionScript(), "JSON.parse(requestOrMethod)")
   }
 
   @Test

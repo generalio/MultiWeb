@@ -8,6 +8,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.Button
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
@@ -51,6 +52,11 @@ private fun sampleFontFamily(): FontFamily = FontFamily(
 @Composable
 internal fun SampleWebViewScreen(
   controller: WebViewController,
+  isFullscreen: Boolean = false,
+  pendingImageSaveUrl: String? = null,
+  hostCapabilityNotice: String? = null,
+  onImageSaveConfirmed: (String) -> Unit = {},
+  onImageSaveDismissed: () -> Unit = {},
   onWebViewStateChanged: (WebViewState) -> Unit = {},
   webViewContent: @Composable () -> Unit,
 ) {
@@ -86,116 +92,145 @@ internal fun SampleWebViewScreen(
       titleSmall = MaterialTheme.typography.titleSmall.copy(fontFamily = sampleFontFamily),
     ),
   ) {
-    Column(
-      modifier = Modifier
-        .fillMaxSize()
+    pendingImageSaveUrl?.let { imageUrl ->
+      AlertDialog(
+        onDismissRequest = onImageSaveDismissed,
+        title = { Text("保存图片") },
+        text = { Text("确认将受信任网页请求的图片保存到本机吗？") },
+        confirmButton = {
+          Button(onClick = { onImageSaveConfirmed(imageUrl) }) {
+            Text("保存")
+          }
+        },
+        dismissButton = {
+          Button(onClick = onImageSaveDismissed) {
+            Text("取消")
+          }
+        },
+      )
+    }
+    if (isFullscreen) {
+      Box(modifier = Modifier.fillMaxSize()) {
+        webViewContent()
+      }
+    } else {
+      Column(
+        modifier = Modifier
+          .fillMaxSize()
         .padding(12.dp),
-      verticalArrangement = Arrangement.spacedBy(8.dp),
-    ) {
-      Row(
-        modifier = Modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        verticalArrangement = Arrangement.spacedBy(8.dp),
       ) {
-        Button(
-          enabled = uiState.webViewState.canGoBack,
-          onClick = {
+        Row(
+          modifier = Modifier.fillMaxWidth(),
+          horizontalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+          Button(
+            enabled = uiState.webViewState.canGoBack,
+            onClick = {
+              presenter.goBack()
+              uiState = presenter.uiState
+            },
+          ) {
+            Text("返回")
+          }
+          Text(
+            text = samplePageTitle(uiState.webViewState),
+            modifier = Modifier.weight(1f),
+            style = MaterialTheme.typography.titleMedium,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+          )
+        }
+        OutlinedTextField(
+          value = uiState.urlInput,
+          onValueChange = { url ->
+            presenter.updateUrlInput(url)
+            uiState = presenter.uiState
+          },
+          modifier = Modifier.fillMaxWidth(),
+          singleLine = true,
+          label = { Text("页面地址") },
+        )
+        Row(
+          modifier = Modifier.fillMaxWidth(),
+          horizontalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+          Button(onClick = {
             presenter.goBack()
             uiState = presenter.uiState
-          },
-        ) {
-          Text("返回")
-        }
-        Text(
-          text = samplePageTitle(uiState.webViewState),
-          modifier = Modifier.weight(1f),
-          style = MaterialTheme.typography.titleMedium,
-          maxLines = 1,
-          overflow = TextOverflow.Ellipsis,
-        )
-      }
-      OutlinedTextField(
-        value = uiState.urlInput,
-        onValueChange = { url ->
-          presenter.updateUrlInput(url)
-          uiState = presenter.uiState
-        },
-        modifier = Modifier.fillMaxWidth(),
-        singleLine = true,
-        label = { Text("页面地址") },
-      )
-      Row(
-        modifier = Modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.spacedBy(8.dp),
-      ) {
-        Button(onClick = {
-          presenter.goBack()
-          uiState = presenter.uiState
-        }) {
-          Text("返回")
-        }
-        Button(onClick = {
-          presenter.goForward()
-          uiState = presenter.uiState
-        }) {
-          Text("前进")
-        }
-        Button(onClick = {
-          presenter.reload()
-          uiState = presenter.uiState
-        }) {
-          Text("刷新")
-        }
-        Button(onClick = {
-          presenter.load()
-          uiState = presenter.uiState
-        }) {
-          Text("加载")
-        }
-      }
-      Row(
-        horizontalArrangement = Arrangement.spacedBy(8.dp),
-      ) {
-        Button(
-          enabled = uiState.webViewState.isLoading,
-          onClick = {
-            presenter.stopLoading()
+          }) {
+            Text("返回")
+          }
+          Button(onClick = {
+            presenter.goForward()
             uiState = presenter.uiState
-          },
+          }) {
+            Text("前进")
+          }
+          Button(onClick = {
+            presenter.reload()
+            uiState = presenter.uiState
+          }) {
+            Text("刷新")
+          }
+          Button(onClick = {
+            presenter.load()
+            uiState = presenter.uiState
+          }) {
+            Text("加载")
+          }
+        }
+        Row(
+          horizontalArrangement = Arrangement.spacedBy(8.dp),
         ) {
-          Text("停止")
+          Button(
+            enabled = uiState.webViewState.isLoading,
+            onClick = {
+              presenter.stopLoading()
+              uiState = presenter.uiState
+            },
+          ) {
+            Text("停止")
+          }
+          Button(onClick = {
+            presenter.clearSession()
+            uiState = presenter.uiState
+          }) {
+            Text("清理会话")
+          }
         }
-        Button(onClick = {
-          presenter.clearSession()
-          uiState = presenter.uiState
-        }) {
-          Text("清理会话")
+        uiState.actionError?.let { error ->
+          Text(
+            text = error,
+            color = MaterialTheme.colorScheme.error,
+          )
         }
-      }
-      uiState.actionError?.let { error ->
-        Text(
-          text = error,
-          color = MaterialTheme.colorScheme.error,
-        )
-      }
-      uiState.webViewState.error?.let { error ->
-        Text(
-          text = "页面错误：${error.description}",
-          color = MaterialTheme.colorScheme.error,
-        )
-      }
-      if (uiState.webViewState.isLoading) {
-        LinearProgressIndicator(
-          progress = { uiState.webViewState.loadingProgress },
-          modifier = Modifier.fillMaxWidth(),
-        )
-      }
-      Text("当前地址：${uiState.webViewState.url ?: "未加载"}")
-      Box(
-        modifier = Modifier
-          .fillMaxWidth()
-          .weight(1f),
-      ) {
-        webViewContent()
+        uiState.webViewState.error?.let { error ->
+          Text(
+            text = "页面错误：${error.description}",
+            color = MaterialTheme.colorScheme.error,
+          )
+        }
+        hostCapabilityNotice?.let { notice ->
+          Text(
+            text = notice,
+            color = MaterialTheme.colorScheme.secondary,
+          )
+        }
+        if (uiState.webViewState.isLoading) {
+          LinearProgressIndicator(
+            progress = { uiState.webViewState.loadingProgress },
+            modifier = Modifier.fillMaxWidth(),
+          )
+        }
+        Text("当前地址：${uiState.webViewState.url ?: "未加载"}")
+        Box(
+          modifier = Modifier
+            .fillMaxWidth()
+            .weight(1f),
+        ) {
+          webViewContent()
+        }
       }
     }
   }

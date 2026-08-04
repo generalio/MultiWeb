@@ -121,7 +121,7 @@ val controller = DesktopWebViewController(
 
 `webview-browser` 不提供嵌入式浏览器。`BrowserWebViewController.load()` 通过浏览器 API 打开新的窗口或
 标签页；弹窗可能被用户浏览器阻止。该模块没有会话隔离能力，调用 `clearSession()` 会抛出
-`UnsupportedOperationException`。
+`UnsupportedOperationException`。它不会安装 JS 桥，因此不支持由网页触发的原生全屏或图片保存能力。
 
 ## 页面事件与 JS 桥
 
@@ -149,6 +149,29 @@ val extension = object : WebViewExtension {
 
 将扩展通过 `extensions = listOf(extension)` 传给 Android、iOS 或 Desktop 控制器。桥名应使用业务命名空间；
 调用参数和返回值必须由业务方自行做格式、权限和大小校验。
+
+### Compose 示例桥
+
+`sample-compose` 仅向 `app.redrock.team` 与 `m.app.redrock.team` 注入名为 `multiWebSample` 的桥。网页使用
+同一条 JSON 文本协议调用：
+
+```javascript
+window.multiWebSample.postMessage(JSON.stringify({
+  method: "setFullscreen",
+  payload: "true",
+}))
+
+window.multiWebSample.postMessage(JSON.stringify({
+  method: "saveImage",
+  payload: "https://cdn.redrock.team/path/to/image.png",
+}))
+```
+
+`setFullscreen` 由 Android、iOS 和 Desktop 宿主切换各自的沉浸式窗口状态。`saveImage` 只接受精确的
+`https://cdn.redrock.team` 图片地址，拒绝端口、凭据、HTTP 与其他主机；收到请求后还必须由用户在 Compose
+确认对话框中确认。Android 与 Desktop 会禁止重定向，并在校验响应 MIME 类型和 10 MiB 上限后分别保存到
+公共图片目录和 `Downloads`；iOS 仅申请照片库“仅新增”权限，并对每一次重定向复核 CDN 主机。JS/Wasm
+不注入此桥。
 
 ## 加载与释放
 
