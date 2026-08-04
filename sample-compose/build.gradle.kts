@@ -10,6 +10,7 @@ import org.gradle.jvm.toolchain.JavaLanguageVersion
 import org.gradle.jvm.toolchain.JavaToolchainService
 import org.gradle.jvm.toolchain.JvmVendorSpec
 import org.jetbrains.kotlin.gradle.dsl.KotlinMultiplatformExtension
+import org.jetbrains.kotlin.gradle.plugin.mpp.KotlinNativeTarget
 
 // JCEF 的 macOS Swing 嵌入实现依赖这些 JDK 内部 AWT 包，Java 17+ 必须显式导出。
 val jcefMacOsJvmArguments = if (System.getProperty("os.name").startsWith("Mac")) {
@@ -78,6 +79,13 @@ extensions.configure<KotlinMultiplatformExtension> {
   wasmJs {
     browser()
     binaries.executable()
+  }
+
+  targets.withType<KotlinNativeTarget>().configureEach {
+    binaries.framework {
+      // 供 iosApp 直接导入；由 embedAndSignAppleFrameworkForXcode 复制到 Xcode 构建产物目录。
+      baseName = "MultiWebSample"
+    }
   }
 
   sourceSets {
