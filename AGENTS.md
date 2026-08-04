@@ -38,6 +38,7 @@
 
 - 发布凭据只能从 Gradle 属性或环境变量读取，禁止写入 `gradle.properties`、源码、文档示例或 Git 历史。
 - POM 的仓库地址、许可证和开发者信息未确认时必须参数化配置，禁止填入推测值；发布前由仓库所有者提供实际信息。
+- Maven Central 正式发布必须经过已验证的 Central Portal 命名空间与 GPG 签名；普通构建和 GitHub Packages 发布不得隐式触发 Central 上传。
 
 ## GitHub Actions
 

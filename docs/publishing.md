@@ -1,51 +1,90 @@
 # 发布说明
 
-## 本地验证
+MultiWeb 的公开发布坐标为 `io.github.generalio.multiweb:<模块名>:<版本>`。例如：
 
-在工程根目录执行：
+```kotlin
+repositories {
+  mavenCentral()
+}
+
+dependencies {
+  implementation("io.github.generalio.multiweb:webview-api:<版本>")
+  implementation("io.github.generalio.multiweb:webview-android:<版本>")
+}
+```
+
+`io.github.multiweb` 是历史坐标，已发布的构件不能重命名；新版本请使用上述坐标。
+
+## Maven Central 前置条件
+
+发布者需要完成以下一次性配置：
+
+1. 在 [Central Portal](https://central.sonatype.com/) 注册账号，并验证 `io.github.generalio` 命名空间。
+2. 在 Central Portal 的 User Token 页面生成发布令牌，保存生成的用户名和密码。
+3. 生成 GPG 密钥对并发布公钥。Central Portal 要求构件签名可由公开密钥验证。
+4. 不要将发布令牌、私钥或密码提交到仓库。
+
+生成和查看 GPG 密钥：
+
+```shell
+gpg --full-generate-key
+gpg --list-secret-keys --keyid-format LONG
+gpg --keyserver keyserver.ubuntu.com --send-keys <密钥ID>
+```
+
+导出用于 CI 的 ASCII 装甲私钥。该命令会在终端显示私钥，只能复制到 GitHub Secret，不能保存到项目文件：
+
+```shell
+gpg --export-secret-keys --armor <密钥ID>
+```
+
+## GitHub Actions 密钥
+
+在仓库的 `Settings` -> `Secrets and variables` -> `Actions` -> `New repository secret` 中配置：
+
+| Secret | 值 |
+| --- | --- |
+| `MAVEN_CENTRAL_USERNAME` | Central Portal User Token 的用户名 |
+| `MAVEN_CENTRAL_PASSWORD` | Central Portal User Token 的密码 |
+| `SIGNING_KEY` | 完整 ASCII 装甲 GPG 私钥 |
+| `SIGNING_PASSWORD` | GPG 私钥口令；无口令私钥可不配置 |
+
+推送符合 `vX.Y.Z` 格式的标签后，GitHub Packages 工作流始终执行；Maven Central 工作流只有在前三项必需 Secret 全部存在时才会执行。`SIGNING_PASSWORD` 仅在私钥设有口令时需要。Central 构件上传、校验与正式发布由 Central Portal 自动完成，索引生效通常需要数分钟。
+
+## 本地发布验证
+
+本机凭据只能放在 `~/.gradle/gradle.properties`，例如：
+
+```properties
+mavenCentralUsername=<Central Portal User Token 用户名>
+mavenCentralPassword=<Central Portal User Token 密码>
+signingInMemoryKey=<ASCII 装甲 GPG 私钥>
+# 私钥设有口令时才配置 signingInMemoryKeyPassword。
+```
+
+先验证本地 Maven 构件：
 
 ```shell
 ./gradlew publishToMavenLocal
 ```
 
-使用方加入 `mavenLocal()` 后，即可使用 `io.github.generalio.multiweb` 下的各模块坐标。当前版本由
-`VERSION_NAME` 决定。
-
-发布坐标已从 `io.github.multiweb` 迁移至 `io.github.generalio.multiweb`。旧坐标下已经发布的版本不会
-被重命名，使用方升级到新版本时需要同步更新依赖声明。
-
-## GitHub Packages 自动发布
-
-仓库内的 [发布工作流](../.github/workflows/publish.yml) 会在推送 `vX.Y.Z` 标签时自动执行：
-
-1. 在 macOS runner 上执行公共 API 校验并构建 Android、iOS 与桌面发布物。
-2. 以去除 `v` 前缀后的标签值覆盖本次 Gradle 发布版本。
-3. 使用 GitHub Actions 提供的短期令牌发布到当前仓库的 GitHub Packages。
-4. 在发布成功后创建包含自动生成说明的 GitHub Release。
-
-正式发布标签必须是 `v主版本.次版本.修订版本`，可追加预发布标识，例如 `v1.2.0-rc.1`；不允许使用
-`SNAPSHOT`。项目当前远端仓库为 `generalio/MultiWeb`，使用方仓库地址为：
-
-`https://maven.pkg.github.com/generalio/MultiWeb`
-
-建议的版本管理流程：
-
-1. 日常开发保持 `VERSION_NAME` 为下一版本的 `-SNAPSHOT`，例如 `0.1.1-SNAPSHOT`。
-2. 合并到 `main` 后，确认“构建校验”工作流通过。
-3. 创建并推送正式标签，例如：
+确认元数据和签名配置后，才可以显式上传 Central：
 
 ```shell
-git tag -a v0.1.0 -m "Release 0.1.0"
-git push origin v0.1.0
+./gradlew publishAndReleaseToMavenCentral -PMULTIWEB_ENABLE_MAVEN_CENTRAL=true -PVERSION_NAME=<正式版本>
 ```
 
-4. GitHub Actions 发布完成后，将 `VERSION_NAME` 升级到下一个开发版本并提交，例如 `0.1.1-SNAPSHOT`。
+该命令会触发真实上传，版本不可覆盖前必须确认版本号未被 Maven Central 使用。
 
-使用方配置仓库：
+## GitHub Packages
+
+GitHub Packages 继续保留为仓库分发渠道。发布标签会触发 [GitHub Packages 工作流](../.github/workflows/publish.yml)，其版本取自标签去掉 `v` 后的值。正式版本不能包含 `SNAPSHOT`。
+
+使用私有 GitHub Packages 时，使用方需要具备仓库读取权限的令牌：
 
 ```kotlin
 repositories {
-  maven("https://maven.pkg.github.com/<owner>/<repository>") {
+  maven("https://maven.pkg.github.com/generalio/MultiWeb") {
     credentials {
       username = providers.gradleProperty("MULTIWEB_GITHUB_USER").orNull
       password = providers.gradleProperty("MULTIWEB_GITHUB_TOKEN").orNull
@@ -54,22 +93,15 @@ repositories {
 }
 ```
 
-## 通用 Maven 仓库
+## 版本管理
 
-支持使用 Basic Auth 的 Maven 仓库。发布环境提供仓库地址与认证信息后执行 `./gradlew publish`；认证信息
-只能存放在本机 Gradle 用户目录或 CI 密钥配置中，不得进入此仓库。
+1. 日常开发保持 `VERSION_NAME` 为下一个 `-SNAPSHOT` 版本。
+2. 合并到 `main` 后确认构建校验工作流通过。
+3. 创建并推送正式标签，例如：
 
-POM 的以下属性仅在全部所需值存在时写入，避免生成虚构元数据：
-
-```properties
-MULTIWEB_POM_URL=<项目主页>
-MULTIWEB_POM_LICENSE_NAME=<许可证名称>
-MULTIWEB_POM_LICENSE_URL=<许可证地址>
-MULTIWEB_POM_SCM_URL=<源码仓库地址>
-MULTIWEB_POM_SCM_CONNECTION=<SCM 连接地址>
-MULTIWEB_POM_DEVELOPER_ID=<开发者标识>
-MULTIWEB_POM_DEVELOPER_NAME=<开发者名称>
+```shell
+git tag -a v0.2.0 -m "Release 0.2.0"
+git push origin v0.2.0
 ```
 
-Maven Central 的最终发布还需要仓库所有者确认许可证、源码地址、开发者信息和 Central Portal 签名方案；这些
-信息尚未在工程中定义，因此本阶段不配置远程 Central 发布。
+4. 发布完成后，将 `VERSION_NAME` 更新为下一个开发版本并提交。

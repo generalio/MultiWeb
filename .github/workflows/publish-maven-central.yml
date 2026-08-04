@@ -1,0 +1,74 @@
+name: 发布 Maven Central
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: read
+
+jobs:
+  publish:
+    name: 发布 Maven Central 构件
+    runs-on: macos-latest
+
+    steps:
+      - name: 检出发布标签
+        uses: actions/checkout@v4
+
+      - name: 配置 JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+          cache: gradle
+
+      - name: 配置 Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: 安装 Android 编译平台
+        run: sdkmanager "platforms;android-35" "build-tools;35.0.0"
+
+      - name: 校验发布标签版本
+        id: version
+        env:
+          TAG_NAME: ${{ github.ref_name }}
+        run: |
+          version="${TAG_NAME#v}"
+          if [[ ! "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z][0-9A-Za-z.-]*)?$ ]]; then
+            echo "发布标签必须为 vX.Y.Z 或 vX.Y.Z-预发布标识，当前为：$TAG_NAME" >&2
+            exit 1
+          fi
+          if [[ "$version" == *SNAPSHOT* ]]; then
+            echo "发布版本不能包含 SNAPSHOT，当前为：$version" >&2
+            exit 1
+          fi
+          echo "value=$version" >> "$GITHUB_OUTPUT"
+
+      - name: 检查 Maven Central 凭据
+        id: credentials
+        env:
+          MAVEN_CENTRAL_USERNAME: ${{ secrets.MAVEN_CENTRAL_USERNAME }}
+          MAVEN_CENTRAL_PASSWORD: ${{ secrets.MAVEN_CENTRAL_PASSWORD }}
+          SIGNING_KEY: ${{ secrets.SIGNING_KEY }}
+          SIGNING_PASSWORD: ${{ secrets.SIGNING_PASSWORD }}
+        run: |
+          if [[ -n "$MAVEN_CENTRAL_USERNAME" && -n "$MAVEN_CENTRAL_PASSWORD" && -n "$SIGNING_KEY" ]]; then
+            echo "available=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "available=false" >> "$GITHUB_OUTPUT"
+            echo "::warning::未配置完整 Maven Central 凭据，本次跳过 Central 发布。"
+          fi
+
+      - name: 校验并发布 Maven Central 构件
+        if: steps.credentials.outputs.available == 'true'
+        env:
+          ORG_GRADLE_PROJECT_mavenCentralUsername: ${{ secrets.MAVEN_CENTRAL_USERNAME }}
+          ORG_GRADLE_PROJECT_mavenCentralPassword: ${{ secrets.MAVEN_CENTRAL_PASSWORD }}
+          ORG_GRADLE_PROJECT_signingInMemoryKey: ${{ secrets.SIGNING_KEY }}
+          ORG_GRADLE_PROJECT_signingInMemoryKeyPassword: ${{ secrets.SIGNING_PASSWORD }}
+        run: >-
+          ./gradlew apiCheck publishAndReleaseToMavenCentral
+          -PMULTIWEB_ENABLE_MAVEN_CENTRAL=true -PVERSION_NAME=${{ steps.version.outputs.value }}
+          --no-parallel -Dorg.gradle.jvmargs=-Xmx2g

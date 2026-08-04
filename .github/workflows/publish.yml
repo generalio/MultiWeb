@@ -1,4 +1,4 @@
-name: 发布 GitHub Packages
+name: 发布 GitHub Packages 与 Release
 
 on:
   push:
@@ -49,9 +49,10 @@ jobs:
           fi
           echo "value=$version" >> "$GITHUB_OUTPUT"
 
-      - name: 校验并发布 Maven 构件
+      - name: 校验并发布 GitHub Packages 构件
         run: >-
-          ./gradlew apiCheck publish -PVERSION_NAME=${{ steps.version.outputs.value }}
+          ./gradlew apiCheck publishAllPublicationsToGitHubPackagesRepository
+          -PVERSION_NAME=${{ steps.version.outputs.value }}
           --no-parallel -Dorg.gradle.jvmargs=-Xmx2g
 
       - name: 创建 GitHub Release
