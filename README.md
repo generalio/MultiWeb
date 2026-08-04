@@ -1,7 +1,8 @@
 # MultiWeb
 
 面向 Kotlin Multiplatform 的原生 WebView 组件库。目前包含 Android 系统 WebView、iOS
-WKWebView 与桌面 JCEF 实现；跨平台模型和导航策略位于 `webview-api`。
+WKWebView 与桌面 JCEF 实现；跨平台模型和导航策略位于 `webview-api`。正式构件发布到 Maven Central，
+坐标统一使用 `io.github.generalio.multiweb`。
 
 ## 模块
 
@@ -13,24 +14,47 @@ WKWebView 与桌面 JCEF 实现；跨平台模型和导航策略位于 `webview-
 | `webview-ios` | iOS WKWebView 实现。 |
 | `webview-desktop` | Swing/AWT JCEF 实现。 |
 | `webview-browser` | JS/Wasm 浏览器新窗口导航实现。 |
-| `webview-test-fixtures` | 面向使用方的契约测试夹具。 |
+| `webview-test-fixtures` | 工程内部契约测试夹具，不发布、不上传，使用方无需依赖。 |
 | `sample-compose` | 不发布的 Compose Multiplatform 集成示例。 |
 
 ## 依赖
 
-发布后，在使用方的仓库中加入已发布仓库，再按平台添加对应模块：
+发布后，使用方只需配置 Maven Central，并按目标平台添加对应模块。所有平台都建议显式依赖
+`webview-api`；平台实现会传递它需要的扩展 API：
 
 ```kotlin
 dependencies {
   implementation("io.github.generalio.multiweb:webview-api:<version>")
-  implementation("io.github.generalio.multiweb:webview-extension-api:<version>")
   implementation("io.github.generalio.multiweb:webview-android:<version>")
-  implementation("io.github.generalio.multiweb:webview-desktop:<version>")
 }
 ```
 
-iOS 模块应添加到 KMP 的 `iosMain` source set。桌面模块依赖 JCEF 原生运行时，宿主必须先初始化
-进程级 `CefApp`，再在 Swing EDT 中创建 `DesktopWebViewController`。
+桌面依赖：
+
+```kotlin
+implementation("io.github.generalio.multiweb:webview-api:<version>")
+implementation("io.github.generalio.multiweb:webview-desktop:<version>")
+```
+
+iOS 模块应添加到 KMP 的 `iosMain` source set：
+
+```kotlin
+iosMain.dependencies {
+  implementation("io.github.generalio.multiweb:webview-ios:<version>")
+}
+```
+
+桌面模块依赖 JCEF 原生运行时，宿主必须先初始化进程级 `CefApp`，再在 Swing EDT 中创建
+`DesktopWebViewController`。JS/Wasm 使用 `webview-browser`，只负责打开浏览器新窗口或新标签页：
+
+```kotlin
+jsMain.dependencies {
+  implementation("io.github.generalio.multiweb:webview-browser:<version>")
+}
+wasmJsMain.dependencies {
+  implementation("io.github.generalio.multiweb:webview-browser:<version>")
+}
+```
 
 JS/Wasm 使用 `webview-browser`。该模块按导航策略在浏览器新标签页或新窗口中打开 URL，不提供嵌入式
 WebView 或浏览器全局会话清理能力。
@@ -41,16 +65,27 @@ Desktop 使用 JCEF `CefMessageRouter`，桥对象仅注入 HTTPS 精确主机�
 子类。控制器始终自行组合安全导航与原生 Client，业务代码不得覆盖 `WebViewClient`、`WebChromeClient` 或使用
 `addJavascriptInterface` 暴露桥对象。
 
+完整接入示例见 [使用指南](docs/usage.md)，架构边界见 [架构说明](docs/architecture.md)。
+
 发布和仓库配置见 [发布说明](docs/publishing.md)。
+
+本地开发流程见 [开发指南](docs/development.md)，二次开发和提 PR 见 [贡献指南](docs/contributing.md)。
 
 GitHub Packages 的正式版本由 `vX.Y.Z` Git 标签自动发布，详细版本管理流程同样见发布说明。
 
 ## Compose 示例
 
 `sample-compose` 以同一套 Compose 界面分别接入 Android 系统 WebView、iOS WKWebView、桌面
-JCEF 与 JS/Wasm 浏览器新窗口实现。其公共命令逻辑使用 `FakeWebViewController` 测试；原生运行时
-集成测试仍需要对应平台设备或宿主环境。常用构建命令：
+JCEF 与 JS/Wasm 浏览器新窗口实现。其公共命令逻辑使用内部 `FakeWebViewController` 测试；该测试夹具
+不会发布。原生运行时集成测试仍需要对应平台设备或宿主环境。常用构建命令：
 
 ```shell
 ./gradlew :sample-compose:assembleDebug :sample-compose:desktopTest
 ```
+
+## 快速入口
+
+- [使用指南](docs/usage.md)：依赖、初始化、平台接入和扩展能力。
+- [架构说明](docs/architecture.md)：模块职责、安全边界和资源生命周期。
+- [开发指南](docs/development.md)：环境、构建、测试和版本流程。
+- [贡献指南](docs/contributing.md)：分支、提交、PR 和代码审查规范。

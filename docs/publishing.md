@@ -15,6 +15,10 @@ dependencies {
 
 `io.github.multiweb` 是历史坐标，已发布的构件不能重命名；新版本请使用上述坐标。
 
+发布清单只包含可供使用方依赖的组件：`webview-api`、`webview-extension-api`、`webview-android`、
+`webview-ios`、`webview-desktop` 和 `webview-browser`。`webview-test-fixtures` 是工程内部测试夹具，
+不应用发布插件，也不会出现在 GitHub Packages 或 Maven Central。
+
 ## Maven Central 前置条件
 
 发布者需要完成以下一次性配置：
@@ -113,3 +117,17 @@ git push origin v0.2.0
 ```
 
 4. 发布完成后，将 `VERSION_NAME` 更新为下一个开发版本并提交。
+
+发布前可检查任务边界：
+
+```shell
+if ./gradlew :webview-test-fixtures:tasks --all | rg -q '(^|[[:space:]])publish[A-Za-z]'; then
+  echo "错误：测试夹具存在 Maven 发布任务。" >&2
+  exit 1
+fi
+./gradlew tasks --all | rg "publishAllPublicationsTo(GitHubPackages|MavenCentral)Repository"
+```
+
+第一段命令退出为 `0` 即表示测试夹具不存在 Maven 发布任务。Kotlin 可能显示
+`export*PublicationCoordinates*` 元数据任务，它们不会发布或上传构件。第二条命令用于确认正式发布入口
+仍可被 Gradle 发现。

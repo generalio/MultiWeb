@@ -1,0 +1,66 @@
+# 架构说明
+
+## 设计目标
+
+MultiWeb 通过稳定的跨平台控制器契约提供原生 WebView 能力。公共层只描述页面加载、状态、导航策略和
+安全配置；每个平台模块持有对应的原生视图与生命周期。这样可以在不向公共代码泄漏 Android、UIKit、
+WebKit 或 JCEF 类型的前提下，保持平台能力可扩展。
+
+## 模块边界
+
+```text
+webview-api
+├── webview-extension-api
+├── webview-android
+├── webview-ios
+├── webview-desktop
+└── webview-browser
+
+sample-compose ──> 平台实现模块 + webview-api
+webview-test-fixtures ──> webview-api（仅工程内测试，不发布）
+```
+
+| 模块 | 责任 | 不应承担的责任 |
+| --- | --- | --- |
+| `webview-api` | `WebViewController`、请求、状态、安全配置和导航策略。 | 任何平台或 Compose 类型。 |
+| `webview-extension-api` | 页面事件、下载、上下文操作、宿主 UI 请求和受限 JS 桥契约。 | 替换平台 Client 或绕过安全策略。 |
+| `webview-android` | 系统 `WebView`、Android 生命周期转发和 AndroidX WebKit 受限消息桥。 | 将原生桥直接暴露给任意页面。 |
+| `webview-ios` | `WKWebView`、导航代理和 WebKit 消息桥。 | 精确控制 WebKit 的系统级第三方 Cookie 策略。 |
+| `webview-desktop` | JCEF 浏览器、事件处理、受限桥和关闭流程。 | 管理进程级 `CefApp` 的创建与销毁。 |
+| `webview-browser` | JS/Wasm 的 URL 校验和新窗口打开。 | 伪装为嵌入式 WebView 或清理浏览器全局会话。 |
+| `webview-test-fixtures` | 示例和工程内的非设备契约测试替身。 | 作为对外 Maven API 或发布构件。 |
+
+## 调用流程
+
+1. 宿主创建平台控制器，传入 `WebViewConfig` 与 `NavigationPolicy`。
+2. 宿主调用 `load(WebRequest)`。
+3. 控制器先执行主机白名单和导航策略，再决定内嵌加载、取消或回调 `onExternalNavigation`。
+4. 原生页面事件更新 `WebViewState`，并按顺序转发给 `WebViewExtension`。
+5. 宿主销毁界面时调用 `dispose()`；调用后控制器不可再使用。
+
+## 安全边界
+
+- 默认导航策略只允许 HTTPS。需要自定义 Scheme、HTTP 或外部跳转时，必须显式实现 `NavigationPolicy`。
+- JavaScript、文件访问和第三方 Cookie 默认关闭。放宽任意一项前，应评估目标站点和平台差异。
+- `allowedHosts` 是精确主机名白名单，不支持通配符。JS 桥仅会对声明过的 HTTPS 主机注入，并在原生侧再次校验来源。
+- Android 不允许业务代码替换内部 `WebViewClient`、`WebChromeClient`，也禁止使用 `addJavascriptInterface`。
+- Desktop 对不能按单浏览器可靠限制的 JCEF 设置会显式拒绝创建，避免以不安全的进程级默认值静默运行。
+- JS/Wasm 由浏览器负责 Cookie、缓存和权限，`clearSession()` 会抛出异常而不是制造已清理的错误印象。
+
+## 生命周期
+
+| 平台 | 宿主职责 |
+| --- | --- |
+| Android | 在主线程创建；挂载 `controller.view`；前后台时转发 `onHostPause()`、`onHostResume()`；销毁时调用 `dispose()`。 |
+| iOS | 在主线程创建；将 `controller.view` 添加到 UIKit 层级；销毁时调用 `dispose()`。 |
+| Desktop | 在 Swing EDT 创建；宿主负责进程级 `CefApp`；调用 `dispose()` 后等待 `onBrowserClosed` 再销毁 `CefApp`。 |
+| JS/Wasm | 无原生视图，按策略在新窗口或新标签页打开 URL；不持有浏览器会话。 |
+
+## 扩展方式
+
+跨平台行为优先通过 `WebViewExtension` 扩展，而不是修改控制器源码。扩展可监听页面事件、下载和上下文
+操作，也可以提供受限 JS 桥。Android 的外观或埋点类 WebView 子类可通过 `AndroidWebViewFactory` 注入，
+但工厂返回的实例必须保持未配置 Client、未销毁状态，由控制器统一安装安全配置。
+
+新增平台功能时，应先判断它是否能被抽象为所有平台共同的契约；只有跨平台语义稳定时才加入
+`webview-api` 或 `webview-extension-api`。平台独有能力保留在对应模块，避免公共 API 被单个平台细节污染。
