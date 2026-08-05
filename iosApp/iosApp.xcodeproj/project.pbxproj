@@ -122,7 +122,7 @@
       outputPaths = ();
       runOnlyForDeploymentPostprocessing = 0;
       shellPath = /bin/sh;
-      shellScript = "set -eu\nexport DEVELOPER_DIR=\"${DEVELOPER_DIR:-/Applications/Xcode.app/Contents/Developer}\"\ncd \"$SRCROOT/..\"\n./gradlew :sample-compose:embedAndSignAppleFrameworkForXcode\n";
+      shellScript = "if [ \"YES\" = \"$OVERRIDE_KOTLIN_BUILD_IDE_SUPPORTED\" ]; then\n  echo \"Skipping Gradle build task invocation due to OVERRIDE_KOTLIN_BUILD_IDE_SUPPORTED environment variable set to \\\"YES\\\"\"\n  exit 0\nfi\nset -eu\nexport DEVELOPER_DIR=\"${DEVELOPER_DIR:-/Applications/Xcode.app/Contents/Developer}\"\ncd \"$SRCROOT/..\"\n./gradlew :sample-compose:embedAndSignAppleFrameworkForXcode --no-parallel -Dorg.gradle.jvmargs=\"-Xmx2g -XX:MaxMetaspaceSize=512m\"";
     };
 /* End PBXShellScriptBuildPhase section */
 
