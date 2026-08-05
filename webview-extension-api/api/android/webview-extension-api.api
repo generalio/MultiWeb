@@ -297,6 +297,68 @@ public final class io/github/multiweb/extension/WebContextAction$LinkLongPressed
 	public fun toString ()Ljava/lang/String;
 }
 
+public abstract interface class io/github/multiweb/extension/WebFileChooserHandler : io/github/multiweb/extension/WebViewExtension {
+	public abstract fun onFileChooserRequested (Lio/github/multiweb/extension/WebFileChooserRequest;Lkotlin/jvm/functions/Function1;)V
+}
+
+public final class io/github/multiweb/extension/WebFileChooserHandler$DefaultImpls {
+	public static fun getScriptBridges (Lio/github/multiweb/extension/WebFileChooserHandler;)Ljava/util/List;
+	public static fun onContextAction (Lio/github/multiweb/extension/WebFileChooserHandler;Lio/github/multiweb/extension/WebContextAction;)V
+	public static fun onDownloadRequested (Lio/github/multiweb/extension/WebFileChooserHandler;Lio/github/multiweb/extension/DownloadRequest;)V
+	public static fun onHostUiRequest (Lio/github/multiweb/extension/WebFileChooserHandler;Lio/github/multiweb/extension/HostUiRequest;)V
+	public static fun onPageError (Lio/github/multiweb/extension/WebFileChooserHandler;Lio/github/multiweb/extension/PageErrorEvent;)V
+	public static fun onPageFinished (Lio/github/multiweb/extension/WebFileChooserHandler;Lio/github/multiweb/extension/PageFinishedEvent;)V
+	public static fun onPageStarted (Lio/github/multiweb/extension/WebFileChooserHandler;Lio/github/multiweb/extension/PageStartedEvent;)V
+}
+
+public final class io/github/multiweb/extension/WebFileChooserMode : java/lang/Enum {
+	public static final field Open Lio/github/multiweb/extension/WebFileChooserMode;
+	public static final field Save Lio/github/multiweb/extension/WebFileChooserMode;
+	public static fun getEntries ()Lkotlin/enums/EnumEntries;
+	public static fun valueOf (Ljava/lang/String;)Lio/github/multiweb/extension/WebFileChooserMode;
+	public static fun values ()[Lio/github/multiweb/extension/WebFileChooserMode;
+}
+
+public final class io/github/multiweb/extension/WebFileChooserRequest {
+	public fun <init> ()V
+	public fun <init> (Ljava/util/List;Lio/github/multiweb/extension/WebFileChooserMode;ZZ)V
+	public synthetic fun <init> (Ljava/util/List;Lio/github/multiweb/extension/WebFileChooserMode;ZZILkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public final fun component1 ()Ljava/util/List;
+	public final fun component2 ()Lio/github/multiweb/extension/WebFileChooserMode;
+	public final fun component3 ()Z
+	public final fun component4 ()Z
+	public final fun copy (Ljava/util/List;Lio/github/multiweb/extension/WebFileChooserMode;ZZ)Lio/github/multiweb/extension/WebFileChooserRequest;
+	public static synthetic fun copy$default (Lio/github/multiweb/extension/WebFileChooserRequest;Ljava/util/List;Lio/github/multiweb/extension/WebFileChooserMode;ZZILjava/lang/Object;)Lio/github/multiweb/extension/WebFileChooserRequest;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getAcceptTypes ()Ljava/util/List;
+	public final fun getAllowDirectories ()Z
+	public final fun getAllowMultipleSelection ()Z
+	public final fun getMode ()Lio/github/multiweb/extension/WebFileChooserMode;
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public abstract interface class io/github/multiweb/extension/WebFileChooserResult {
+}
+
+public final class io/github/multiweb/extension/WebFileChooserResult$Cancelled : io/github/multiweb/extension/WebFileChooserResult {
+	public static final field INSTANCE Lio/github/multiweb/extension/WebFileChooserResult$Cancelled;
+	public fun equals (Ljava/lang/Object;)Z
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class io/github/multiweb/extension/WebFileChooserResult$Selected : io/github/multiweb/extension/WebFileChooserResult {
+	public fun <init> (Ljava/util/List;)V
+	public final fun component1 ()Ljava/util/List;
+	public final fun copy (Ljava/util/List;)Lio/github/multiweb/extension/WebFileChooserResult$Selected;
+	public static synthetic fun copy$default (Lio/github/multiweb/extension/WebFileChooserResult$Selected;Ljava/util/List;ILjava/lang/Object;)Lio/github/multiweb/extension/WebFileChooserResult$Selected;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getUris ()Ljava/util/List;
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
 public abstract interface class io/github/multiweb/extension/WebViewExtension {
 	public abstract fun getScriptBridges ()Ljava/util/List;
 	public abstract fun onContextAction (Lio/github/multiweb/extension/WebContextAction;)V

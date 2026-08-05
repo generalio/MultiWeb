@@ -1,5 +1,8 @@
 package io.github.multiweb.ios
 
+import io.github.multiweb.ios.filechooser.MultiWebFileChooserAllowsDirectories
+import io.github.multiweb.ios.filechooser.MultiWebFileChooserAllowsMultipleSelection
+import io.github.multiweb.ios.filechooser.MultiWebFileChooserDelegateProtocol
 import io.github.multiweb.api.NavigationDecision
 import io.github.multiweb.api.NavigationPolicy
 import io.github.multiweb.api.NavigationRequest
@@ -13,6 +16,9 @@ import io.github.multiweb.api.WebViewStateObservable
 import io.github.multiweb.extension.PageErrorEvent
 import io.github.multiweb.extension.PageFinishedEvent
 import io.github.multiweb.extension.PageStartedEvent
+import io.github.multiweb.extension.WebFileChooserHandler
+import io.github.multiweb.extension.WebFileChooserRequest
+import io.github.multiweb.extension.WebFileChooserResult
 import io.github.multiweb.extension.WebViewExtension
 import io.github.multiweb.extension.WebViewInitialization
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -43,6 +49,8 @@ import platform.WebKit.WKWebViewConfiguration
 import platform.WebKit.WKWebpagePreferences
 import platform.WebKit.WKWebsiteDataStore
 import platform.darwin.NSObject
+import platform.darwin.dispatch_async
+import platform.darwin.dispatch_get_main_queue
 
 /**
  * 基于系统 [WKWebView] 的 iOS 控制器。
@@ -85,6 +93,8 @@ class IosWebViewController(
   )
 
   private val navigationDecider = IosNavigationDecider(config, navigationPolicy)
+  /** 文件选择扩展至多一个；缺失时网页请求必须显式取消。 */
+  private val fileChooserHandler = extensions.filterIsInstance<WebFileChooserHandler>().singleOrNull()
   private val navigationDelegate = IosNavigationDelegate(this)
   private val uiDelegate = IosUiDelegate(this)
   /** JS 桥处理器必须与 WKWebView 同生命周期保存，避免被 Objective-C 运行时提前释放。 */
@@ -112,8 +122,14 @@ class IosWebViewController(
 
   override val stateFlow: StateFlow<WebViewState> = mutableState.asStateFlow()
 
+  /** 当前尚未完成的 WebKit 文件选择回调；控制器释放时必须显式取消。 */
+  private var activeFileChooserCompletion: ((List<*>?) -> Unit)? = null
+
   init {
     checkMainThread()
+    require(extensions.count { extension -> extension is WebFileChooserHandler } <= 1) {
+      "WebViewInitialization.extensions 最多只能配置一个 WebFileChooserHandler。"
+    }
     view = WKWebView(
       frame = CGRectMake(0.0, 0.0, 0.0, 0.0),
       configuration = createConfiguration(),
@@ -182,6 +198,8 @@ class IosWebViewController(
       return
     }
 
+    activeFileChooserCompletion?.invoke(null)
+    activeFileChooserCompletion = null
     view.stopLoading()
     view.navigationDelegate = null
     view.UIDelegate = null
@@ -284,6 +302,74 @@ class IosWebViewController(
     IosWebViewExtensionEventMapper.contextAction(elementInfo.linkURL?.absoluteString)?.let { action ->
       extensions.forEach { extension -> extension.onContextAction(action) }
     }
+  }
+
+  /**
+   * 将 WebKit 的文件上传请求交给宿主。
+   *
+   * `WKUIDelegate` 的文件面板回调仅在 iOS 18.4 及以上系统可用；较低版本不会触发该委托方法，因此网页文件
+   * 上传保持系统不支持状态。无论宿主处理器是否存在，都不会触发 UIKit 的默认选取器或隐式申请媒体权限。
+   */
+  private fun handleFileChooser(
+    parameters: Any?,
+    completionHandler: (List<*>?) -> Unit,
+  ) {
+    activeFileChooserCompletion?.invoke(null)
+    activeFileChooserCompletion = completionHandler
+    val request = WebFileChooserRequest(
+      allowMultipleSelection = MultiWebFileChooserAllowsMultipleSelection(parameters),
+      allowDirectories = MultiWebFileChooserAllowsDirectories(parameters),
+    )
+    val handler = fileChooserHandler
+    if (handler == null) {
+      completeFileChooser(completionHandler, request, WebFileChooserResult.Cancelled)
+      return
+    }
+
+    fun complete(result: WebFileChooserResult) {
+      completeFileChooser(completionHandler, request, result)
+    }
+    try {
+      handler.onFileChooserRequested(request, ::complete)
+    } catch (_: Exception) {
+      // 宿主处理异常不能让网页获得未校验文件地址，按取消处理。
+      complete(WebFileChooserResult.Cancelled)
+    }
+  }
+
+  /** 在主线程且仅针对仍活跃的请求回传一次文件选择结果。 */
+  private fun completeFileChooser(
+    completionHandler: (List<*>?) -> Unit,
+    request: WebFileChooserRequest,
+    result: WebFileChooserResult,
+  ) {
+    dispatch_async(dispatch_get_main_queue()) {
+      if (activeFileChooserCompletion !== completionHandler) {
+        return@dispatch_async
+      }
+      activeFileChooserCompletion = null
+      completionHandler(if (isDisposed) null else result.toIosUrls(request))
+    }
+  }
+
+  /** iOS 仅将绝对 `file://` URI 回传给 WebKit，远程或多余文件都会取消整次请求。 */
+  private fun WebFileChooserResult.toIosUrls(request: WebFileChooserRequest): List<NSURL>? {
+    val selected = this as? WebFileChooserResult.Selected ?: return null
+    if (!request.allowMultipleSelection && selected.uris.size > 1) {
+      return null
+    }
+    val urls = selected.uris.map { uri -> NSURL(string = uri) }
+    if (
+      urls.any { url ->
+        !url.isFileURL() ||
+          url.path?.startsWith("/") != true ||
+          url.query != null ||
+          url.fragment != null
+      }
+    ) {
+      return null
+    }
+    return urls
   }
 
   private fun handlePageStarted() {
@@ -394,13 +480,24 @@ class IosWebViewController(
   /** 仅观察 WebKit 系统上下文菜单；不提供自定义配置，以保留系统默认菜单和预览行为。 */
   private class IosUiDelegate(
     private val controller: IosWebViewController,
-  ) : NSObject(), WKUIDelegateProtocol {
+  ) : NSObject(), WKUIDelegateProtocol, MultiWebFileChooserDelegateProtocol {
     @ObjCSignatureOverride
     override fun webView(
       webView: WKWebView,
       contextMenuWillPresentForElement: WKContextMenuElementInfo,
     ) {
       controller.handleContextAction(contextMenuWillPresentForElement)
+    }
+
+    /** iOS 18.4+ 的网页文件上传入口；宿主完成回调前 WebKit 会保持当前选择请求。 */
+    override fun webView(
+      webView: Any?,
+      runOpenPanelWithParameters: Any?,
+      initiatedByFrame: Any?,
+      completionHandler: ((List<*>?) -> Unit)?,
+    ) {
+      completionHandler ?: return
+      controller.handleFileChooser(runOpenPanelWithParameters, completionHandler)
     }
   }
 }
