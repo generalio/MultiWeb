@@ -1,0 +1,135 @@
+name: 自动推进开发版本
+
+on:
+  workflow_run:
+    workflows:
+      - 发布 GitHub Packages 与 Release
+      - 发布 Maven Central
+    types:
+      - completed
+
+# 自动版本提交只写入 gradle.properties，并在写入后触发既有构建校验工作流。
+permissions:
+  actions: write
+  contents: write
+
+# 同一标签的两个发布工作流可能同时完成，串行执行避免重复创建版本提交。
+concurrency:
+  group: promote-development-version-${{ github.event.workflow_run.head_branch }}
+  cancel-in-progress: false
+
+jobs:
+  promote:
+    # workflow_run 也会接收手动运行等事件；只处理正式发布标签对应的 push 工作流。
+    if: >-
+      github.event.workflow_run.event == 'push' &&
+      startsWith(github.event.workflow_run.head_branch, 'v') &&
+      github.event.workflow_run.conclusion == 'success'
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: 确认完整发布并推进开发版本
+        uses: actions/github-script@v7
+        env:
+          RELEASE_TAG: ${{ github.event.workflow_run.head_branch }}
+        with:
+          script: |
+            const owner = context.repo.owner;
+            const repo = context.repo.repo;
+            const tag = process.env.RELEASE_TAG;
+            const tagMatch = /^v(\d+)\.(\d+)\.(\d+)$/.exec(tag);
+            if (!tagMatch) {
+              core.info(`忽略非正式发布标签：${tag}`);
+              return;
+            }
+
+            const releaseRuns = await github.paginate(
+              github.rest.actions.listWorkflowRunsForRepo,
+              {
+                owner,
+                repo,
+                event: "push",
+                branch: tag,
+                per_page: 100,
+              },
+            );
+            const requiredWorkflows = [
+              "发布 GitHub Packages 与 Release",
+              "发布 Maven Central",
+            ];
+            const requiredRuns = requiredWorkflows.map((workflowName) => {
+              return releaseRuns
+                .filter((run) => run.name === workflowName)
+                .sort((left, right) => {
+                  return Date.parse(right.created_at) - Date.parse(left.created_at);
+                })[0];
+            });
+            if (requiredRuns.some((run) => run?.status !== "completed" || run.conclusion !== "success")) {
+              core.info(`发布尚未全部成功，等待标签 ${tag} 的另一条工作流完成。`);
+              return;
+            }
+
+            const centralRun = requiredRuns[1];
+            const centralJobs = await github.paginate(
+              github.rest.actions.listJobsForWorkflowRun,
+              {
+                owner,
+                repo,
+                run_id: centralRun.id,
+                per_page: 100,
+              },
+            );
+            const centralPublishStep = centralJobs
+              .flatMap((job) => job.steps || [])
+              .find((step) => step.name === "校验并发布 Maven Central 构件");
+            if (centralPublishStep?.conclusion !== "success") {
+              core.info(`标签 ${tag} 未实际发布 Maven Central，停止自动推进开发版本。`);
+              return;
+            }
+
+            try {
+              await github.rest.repos.getReleaseByTag({ owner, repo, tag });
+            } catch (error) {
+              if (error.status === 404) {
+                core.info(`标签 ${tag} 的 GitHub Release 尚未生成。`);
+                return;
+              }
+              throw error;
+            }
+
+            const nextVersion = `${tagMatch[1]}.${tagMatch[2]}.${Number(tagMatch[3]) + 1}-SNAPSHOT`;
+            const versionFile = await github.rest.repos.getContent({
+              owner,
+              repo,
+              path: "gradle.properties",
+              ref: "main",
+            });
+            if (Array.isArray(versionFile.data) || versionFile.data.type !== "file") {
+              throw new Error("无法读取 main 的 gradle.properties。");
+            }
+            const source = Buffer.from(versionFile.data.content, versionFile.data.encoding).toString("utf8");
+            const versionLine = /^VERSION_NAME=(.+)$/m.exec(source);
+            if (!versionLine) {
+              throw new Error("gradle.properties 缺少 VERSION_NAME。");
+            }
+            if (versionLine[1] === nextVersion) {
+              core.info(`main 已是 ${nextVersion}，无需重复提交。`);
+              return;
+            }
+            const updated = source.replace(/^VERSION_NAME=.*$/m, `VERSION_NAME=${nextVersion}`);
+
+            await github.rest.repos.createOrUpdateFileContents({
+              owner,
+              repo,
+              path: "gradle.properties",
+              message: `chore(release): 开启 ${nextVersion.replace("-SNAPSHOT", "")} 开发版本`,
+              content: Buffer.from(updated).toString("base64"),
+              sha: versionFile.data.sha,
+              branch: "main",
+            });
+            await github.rest.actions.createWorkflowDispatch({
+              owner,
+              repo,
+              workflow_id: "verify.yml",
+              ref: "main",
+            });
