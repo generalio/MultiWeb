@@ -130,6 +130,41 @@ class DesktopScriptBridgeConfigurationTest {
     assertContains(configuration.injectionScript(), "nativeBridge.postMessage")
   }
 
+  @Test
+  fun `方法门面拒绝未声明的方法`() {
+    val handler = DesktopScriptBridgeHandler(
+      DesktopScriptBridgeConfiguration.create(
+        listOf(
+          object : ScriptBridgeWithFacade {
+            override val name = "AndroidWebView"
+            override val transportName = "__multiweb_android_transport"
+            override val allowedHosts = setOf("example.com")
+            override val facade = ScriptBridgeFacade(setOf("getToken"))
+
+            override fun handle(call: ScriptBridgeCall): ScriptBridgeResponse {
+              return ScriptBridgeResponse(isSuccess = true, payload = call.method)
+            }
+          },
+        ),
+      ).single(),
+    )
+    val callback = RecordingQueryCallback()
+
+    handler.onQuery(
+      browser = proxy(),
+      frame = frame("https://example.com/page", isMain = true),
+      queryId = 1L,
+      request = "hiddenMethod:",
+      persistent = false,
+      callback = callback,
+    )
+
+    assertEquals(
+      "{\"isSuccess\":false,\"payload\":\"\",\"errorCode\":\"method_not_allowed\"}",
+      callback.response,
+    )
+  }
+
   private fun bridge(
     name: String = "multiWeb",
     hosts: Set<String> = setOf("example.com"),

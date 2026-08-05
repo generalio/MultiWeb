@@ -248,7 +248,11 @@ class AndroidWebViewController(
       }
       false
     }
-    AndroidScriptBridgeInstaller.install(webView, extensions.flatMap(WebViewExtension::scriptBridges))
+    AndroidScriptBridgeInstaller.install(
+      webView = webView,
+      javaScriptEnabled = config.javaScriptEnabled,
+      bridges = extensions.flatMap(WebViewExtension::scriptBridges),
+    )
   }
 
   private fun createWebViewClient(): WebViewClient {

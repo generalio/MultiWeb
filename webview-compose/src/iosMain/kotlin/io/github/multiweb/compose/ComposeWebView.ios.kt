@@ -5,6 +5,7 @@ package io.github.multiweb.compose
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.ui.Modifier
@@ -41,8 +42,10 @@ actual fun WebView(
 ) {
   val iosController = controller as? IosWebViewController
     ?: error("WebView 必须接收 rememberWebViewController 创建的 iOS 控制器。")
-  UIKitView(
-    factory = { iosController.view },
-    modifier = modifier,
-  )
+  key(controller) {
+    UIKitView(
+      factory = { iosController.view },
+      modifier = modifier,
+    )
+  }
 }

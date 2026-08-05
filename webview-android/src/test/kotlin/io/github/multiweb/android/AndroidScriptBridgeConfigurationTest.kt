@@ -89,6 +89,34 @@ class AndroidScriptBridgeConfigurationTest {
     assertContains(requireNotNull(configuration.facadeInjectionScript()), "getToken")
   }
 
+  @Test
+  fun `方法门面只允许声明的方法`() {
+    val configuration = AndroidScriptBridgeConfiguration.create(
+      listOf(
+        object : ScriptBridgeWithFacade {
+          override val name = "AndroidWebView"
+          override val transportName = "__multiweb_android_transport"
+          override val allowedHosts = setOf("example.com")
+          override val facade = ScriptBridgeFacade(setOf("getToken"))
+
+          override fun handle(call: ScriptBridgeCall): ScriptBridgeResponse? = null
+        },
+      ),
+    ).single()
+
+    assertEquals(true, configuration.isMethodAllowed("getToken"))
+    assertEquals(false, configuration.isMethodAllowed("hiddenMethod"))
+  }
+
+  @Test
+  fun `关闭 JavaScript 时不安装桥`() {
+    val bridges = listOf(bridge(hosts = setOf("example.com")))
+
+    assertEquals(false, shouldInstallScriptBridges(javaScriptEnabled = false, bridges))
+    assertEquals(false, shouldInstallScriptBridges(javaScriptEnabled = true, emptyList()))
+    assertEquals(true, shouldInstallScriptBridges(javaScriptEnabled = true, bridges))
+  }
+
   private fun bridge(name: String = "multiWeb", hosts: Set<String>): ScriptBridge {
     return object : ScriptBridge {
       override val name = name
