@@ -5,7 +5,7 @@ import io.github.multiweb.api.WebViewController
 import io.github.multiweb.api.WebViewState
 
 /** 示例项目首次打开的 HTTPS 页面，符合默认导航策略。 */
-internal const val DefaultSampleUrl = "https://example.com"
+internal const val DefaultSampleUrl = "https://app.redrock.team"
 
 /** 页面尚未提供标题时展示的样例标题。 */
 internal const val DefaultSamplePageTitle = "网页"
