@@ -85,7 +85,9 @@ internal data class IosScriptBridgeConfiguration(
   /** 判断 WKWebView 当前主文档是否仍属于当前桥的受信任来源。 */
   fun isAllowedUrl(url: String): Boolean {
     val parsed = NSURL(string = url)
-    return parsed.scheme?.lowercase() == "https" && parsed.host?.lowercase() in allowedHosts
+    return parsed.scheme?.lowercase() == "https" &&
+      parsed.host?.lowercase() in allowedHosts &&
+      (parsed.port?.intValue ?: 443) == 443
   }
 
   fun injectionScript(): String {
@@ -175,7 +177,7 @@ internal data class IosScriptBridgeConfiguration(
     }
     return """
       (function() {
-        if (window.location.protocol !== 'https:' || !($hostCheck)) return;
+        if (window.location.protocol !== 'https:' || window.location.port !== '' || !($hostCheck)) return;
         var handler = window.webkit && window.webkit.messageHandlers && window.webkit.messageHandlers[${transportName.toJavaScriptString()}];
         if (!handler) return;
         try {
@@ -273,7 +275,7 @@ internal class IosScriptBridgeMessageHandler(
     val frameInfo = didReceiveScriptMessage.frameInfo
     val origin = frameInfo.securityOrigin
     if (
-      !frameInfo.mainFrame || origin.protocol != "https" ||
+      !frameInfo.mainFrame || origin.protocol != "https" || origin.port != 443L ||
       origin.host.lowercase() !in configuration.allowedHosts
     ) {
       return

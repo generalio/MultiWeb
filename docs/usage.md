@@ -42,7 +42,8 @@ val policy = NavigationPolicy { request ->
 ```
 
 `DefaultNavigationPolicy` 只允许 HTTPS，不包含主机白名单。`allowedHosts` 为空时由导航策略决定；非空时平台
-控制器还会执行精确主机匹配。它不接受 `*.example.com` 一类通配符。
+控制器还会执行精确主机匹配。它不接受 `*.example.com` 一类通配符；JS 桥只匹配 HTTPS 默认端口 `443`，
+不会向 `https://example.com:8443` 一类非默认端口注入。
 
 ## Android
 

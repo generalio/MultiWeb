@@ -51,6 +51,26 @@ class SampleWebViewExtensionTest {
   }
 
   @Test
+  fun `兼容桥图片保存同样拒绝非受信任地址`() {
+    val requestedUrls = mutableListOf<String>()
+    val bridge = sampleNativeWebViewBridgeExtension(onImageSaveRequested = requestedUrls::add)
+      .scriptBridges
+      .single()
+
+    val response = requireNotNull(
+      bridge.handle(ScriptBridgeCall("savePic", "https://untrusted.example/poster.png")),
+    )
+
+    assertFalse(response.isSuccess)
+    assertEquals("untrusted_image_url", response.errorCode)
+    assertTrue(requestedUrls.isEmpty())
+
+    val validUrl = "https://cdn.redrock.team/app/poster.png"
+    assertTrue(requireNotNull(bridge.handle(ScriptBridgeCall("savePic", validUrl))).isSuccess)
+    assertEquals(listOf(validUrl), requestedUrls)
+  }
+
+  @Test
   fun `未知桥方法明确拒绝`() {
     val response = SampleWebViewExtension().scriptBridges.single()
       .handle(ScriptBridgeCall("executeNativeCode"))

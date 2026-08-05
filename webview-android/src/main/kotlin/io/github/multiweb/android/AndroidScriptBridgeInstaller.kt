@@ -52,6 +52,8 @@ internal object AndroidScriptBridgeInstaller {
 internal data class AndroidScriptBridgeConfiguration(
   val bridge: ScriptBridge,
   val transportName: String,
+  /** 规范化后的精确 HTTPS 主机名，仅匹配默认 HTTPS 端口 443。 */
+  val allowedHosts: Set<String>,
   val allowedOriginRules: Set<String>,
 ) {
   /** 生成受限来源的 Promise 门面；内部消息对象始终使用与网页名称不同的 [transportName]。 */
@@ -154,6 +156,7 @@ internal data class AndroidScriptBridgeConfiguration(
         AndroidScriptBridgeConfiguration(
           bridge = bridge,
           transportName = bridge.transportName,
+          allowedHosts = allowedHosts,
           allowedOriginRules = allowedHosts.mapTo(linkedSetOf()) { "https://$it" },
         )
       }
@@ -170,6 +173,13 @@ internal data class AndroidScriptBridgeConfiguration(
   }
 }
 
+/** 复核来源与 AndroidX 注入规则一致：仅 HTTPS、精确主机及默认端口 443。 */
+private fun AndroidScriptBridgeConfiguration.isAllowedOrigin(origin: Uri): Boolean {
+  return origin.scheme.equals("https", ignoreCase = true) &&
+    origin.host?.lowercase() in allowedHosts &&
+    origin.port in setOf(-1, 443)
+}
+
 /** 将受限来源的网页消息转换为 [ScriptBridge] 调用。 */
 private class AndroidScriptBridgeListener(
   private val configuration: AndroidScriptBridgeConfiguration,
@@ -181,7 +191,7 @@ private class AndroidScriptBridgeListener(
     isMainFrame: Boolean,
     replyProxy: JavaScriptReplyProxy,
   ) {
-    if (!isMainFrame || sourceOrigin.toString() !in configuration.allowedOriginRules) {
+    if (!isMainFrame || !configuration.isAllowedOrigin(sourceOrigin)) {
       replyProxy.postMessage(failureResponse("untrusted_origin"))
       return
     }

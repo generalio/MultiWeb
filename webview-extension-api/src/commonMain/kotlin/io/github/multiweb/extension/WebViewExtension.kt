@@ -107,7 +107,7 @@ interface ScriptBridge {
   val transportName: String
     get() = name
 
-  /** 允许使用该桥的主机名集合，不能为空且不支持通配符。 */
+  /** 允许使用该桥的主机名集合，不能为空且不支持通配符；仅匹配 HTTPS 默认端口 443。 */
   val allowedHosts: Set<String>
 
   /**

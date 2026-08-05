@@ -25,14 +25,15 @@ internal data class DesktopScriptBridgeConfiguration(
   val transportName: String,
   /** 当前桥在页面中使用的查询函数名。 */
   val queryFunction: String,
-  /** 规范化后的精确 HTTPS 主机名。 */
+  /** 规范化后的精确 HTTPS 主机名，仅匹配默认 HTTPS 端口 443。 */
   val allowedHosts: Set<String>,
 ) {
   /** 判断 JCEF 回调所在的主框架是否属于受信任来源。 */
   fun isAllowedUrl(url: String): Boolean {
     val parsed = runCatching { URI(url) }.getOrNull() ?: return false
     return parsed.scheme.equals("https", ignoreCase = true) &&
-      parsed.host?.lowercase() in allowedHosts
+      parsed.host?.lowercase() in allowedHosts &&
+      parsed.port in setOf(-1, 443)
   }
 
   /**
@@ -49,7 +50,7 @@ internal data class DesktopScriptBridgeConfiguration(
     val queryFunction = queryFunction.toJavaScriptString()
     val transportScript = """
       (function() {
-        if (window.location.protocol !== 'https:' || !($hostExpression)) return;
+        if (window.location.protocol !== 'https:' || window.location.port !== '' || !($hostExpression)) return;
         var query = window[$queryFunction];
         if (typeof query !== 'function') return;
         try {

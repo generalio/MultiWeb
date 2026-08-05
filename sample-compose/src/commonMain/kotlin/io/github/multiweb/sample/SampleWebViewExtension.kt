@@ -80,6 +80,9 @@ internal fun sampleNativeWebViewBridgeExtension(
     host = NativeWebViewBridgeHost { request ->
       when (request) {
         is NativeWebViewBridgeRequest.SaveImage -> {
+          if (!request.url.isTrustedSampleImageUrl()) {
+            return@NativeWebViewBridgeHost NativeWebViewBridgeResult.Failure("untrusted_image_url")
+          }
           onImageSaveRequested(request.url)
           NativeWebViewBridgeResult.Success("pending_user_confirmation")
         }

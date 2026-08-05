@@ -23,10 +23,13 @@ class DesktopScriptBridgeConfigurationTest {
 
     assertEquals(setOf("example.com", "api.example.com"), configuration.allowedHosts)
     assertEquals(true, configuration.isAllowedUrl("https://example.com/page"))
+    assertEquals(true, configuration.isAllowedUrl("https://example.com:443/page"))
     assertEquals(false, configuration.isAllowedUrl("http://example.com/page"))
+    assertEquals(false, configuration.isAllowedUrl("https://example.com:8443/page"))
     assertEquals(false, configuration.isAllowedUrl("https://evil.example.com/page"))
     assertContains(configuration.injectionScript(), "__multiweb_query_multiWeb")
     assertContains(configuration.injectionScript(), "window.location.hostname")
+    assertContains(configuration.injectionScript(), "window.location.port !== ''")
     assertContains(configuration.injectionScript(), "JSON.parse(requestOrMethod)")
   }
 
