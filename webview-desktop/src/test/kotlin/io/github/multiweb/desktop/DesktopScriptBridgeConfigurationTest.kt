@@ -4,6 +4,7 @@ import io.github.multiweb.extension.ScriptBridge
 import io.github.multiweb.extension.ScriptBridgeCall
 import io.github.multiweb.extension.ScriptBridgeFacade
 import io.github.multiweb.extension.ScriptBridgeResponse
+import io.github.multiweb.extension.ScriptBridgeWithFacade
 import java.lang.reflect.Proxy
 import org.cef.browser.CefBrowser
 import org.cef.browser.CefFrame
@@ -15,6 +16,11 @@ import kotlin.test.assertFailsWith
 import kotlin.test.assertTrue
 
 class DesktopScriptBridgeConfigurationTest {
+  @Test
+  fun `JavaScript 字符串会转义行与段分隔符`() {
+    assertEquals("\"\\u2028\\u2029\"", "\u2028\u2029".toJavaScriptString())
+  }
+
   @Test
   fun `只允许 HTTPS 精确主机并生成受限注入脚本`() {
     val configuration = DesktopScriptBridgeConfiguration.create(
@@ -29,7 +35,10 @@ class DesktopScriptBridgeConfigurationTest {
     assertEquals(false, configuration.isAllowedUrl("https://evil.example.com/page"))
     assertContains(configuration.injectionScript(), "__multiweb_query_multiWeb")
     assertContains(configuration.injectionScript(), "window.location.hostname")
-    assertContains(configuration.injectionScript(), "window.location.port !== ''")
+    assertContains(
+      configuration.injectionScript(),
+      "window.location.port !== '' && window.location.port !== '443'",
+    )
     assertContains(configuration.injectionScript(), "JSON.parse(requestOrMethod)")
   }
 
@@ -43,6 +52,24 @@ class DesktopScriptBridgeConfigurationTest {
     assertFailsWith<IllegalArgumentException> {
       DesktopScriptBridgeConfiguration.create(
         listOf(bridge(hosts = setOf("*.example.com"))),
+      )
+    }
+  }
+
+  @Test
+  fun `方法门面必须使用独立传输对象`() {
+    assertFailsWith<IllegalArgumentException> {
+      DesktopScriptBridgeConfiguration.create(
+        listOf(
+          object : ScriptBridgeWithFacade {
+            override val name = "AndroidWebView"
+            override val transportName = "AndroidWebView"
+            override val allowedHosts = setOf("example.com")
+            override val facade = ScriptBridgeFacade(setOf("getToken"))
+
+            override fun handle(call: ScriptBridgeCall): ScriptBridgeResponse? = null
+          },
+        ),
       )
     }
   }
@@ -86,7 +113,7 @@ class DesktopScriptBridgeConfigurationTest {
   fun `方法门面使用独立内部传输对象`() {
     val configuration = DesktopScriptBridgeConfiguration.create(
       listOf(
-        object : ScriptBridge {
+        object : ScriptBridgeWithFacade {
           override val name = "AndroidWebView"
           override val transportName = "__multiweb_android_transport"
           override val allowedHosts = setOf("example.com")

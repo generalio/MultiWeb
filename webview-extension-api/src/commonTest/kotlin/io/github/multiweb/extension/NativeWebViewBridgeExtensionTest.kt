@@ -60,10 +60,11 @@ class NativeWebViewBridgeExtensionTest {
       host = NativeWebViewBridgeHost { NativeWebViewBridgeResult.Success() },
     ).scriptBridges.single()
 
+    val bridgeWithFacade = requireNotNull(bridge as? ScriptBridgeWithFacade)
     assertEquals("AndroidWebView", bridge.name)
-    assertEquals("__multiweb_AndroidWebView_transport", bridge.transportName)
+    assertEquals("__multiweb_AndroidWebView_transport", bridgeWithFacade.transportName)
     assertEquals(setOf("app.example.com"), bridge.allowedHosts)
-    assertTrue(requireNotNull(bridge.facade).methodNames.contains("getSystemBarInsets"))
-    assertTrue(requireNotNull(bridge.facade).methodNames.contains("savePic"))
+    assertTrue(bridgeWithFacade.facade.methodNames.contains("getSystemBarInsets"))
+    assertTrue(bridgeWithFacade.facade.methodNames.contains("savePic"))
   }
 }

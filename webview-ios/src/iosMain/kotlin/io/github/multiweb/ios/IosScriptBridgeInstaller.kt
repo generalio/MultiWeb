@@ -2,7 +2,9 @@ package io.github.multiweb.ios
 
 import io.github.multiweb.extension.ScriptBridge
 import io.github.multiweb.extension.ScriptBridgeCall
+import io.github.multiweb.extension.ScriptBridgeFacade
 import io.github.multiweb.extension.ScriptBridgeResponse
+import io.github.multiweb.extension.ScriptBridgeWithFacade
 import kotlinx.cinterop.ExperimentalForeignApi
 import platform.Foundation.NSURL
 import platform.WebKit.WKScriptMessage
@@ -16,7 +18,7 @@ import platform.darwin.NSObject
 /**
  * 为 WKWebView 安装受限来源的 JS 命令桥。
  *
- * 普通消息桥维持单向 `postMessage` 行为。声明了 [io.github.multiweb.extension.ScriptBridge.facade] 的桥会在
+ * 普通消息桥维持单向 `postMessage` 行为。声明了 [io.github.multiweb.extension.ScriptBridgeWithFacade.facade] 的桥会在
  * document-start 脚本中安装 Promise 门面，原生处理完成后通过当前受信任主文档回传
  * [ScriptBridgeResponse]。两条路径均在脚本和原生消息入口校验 HTTPS 精确主机名。
  */
@@ -77,6 +79,8 @@ internal class IosScriptBridgeInstallation(
 internal data class IosScriptBridgeConfiguration(
   val bridge: ScriptBridge,
   val transportName: String,
+  /** 网页公开的受限方法门面；未声明时只暴露消息通道。 */
+  val facade: ScriptBridgeFacade?,
   val allowedHosts: Set<String>,
 ) {
   /** Promise 门面在网页侧等待原生回包时使用的全局回调名称。 */
@@ -91,9 +95,11 @@ internal data class IosScriptBridgeConfiguration(
   }
 
   fun injectionScript(): String {
-    val hostCheck = allowedHosts.joinToString(" || ") { host -> "window.location.hostname === '$host'" }
-    val facade = bridge.facade
-    val facadeMethods = facade?.methodNames?.joinToString(",") { method ->
+    val hostCheck = allowedHosts.joinToString(" || ") { host ->
+      "window.location.hostname === ${host.toJavaScriptString()}"
+    }
+    val bridgeFacade = facade
+    val facadeMethods = bridgeFacade?.methodNames?.joinToString(",") { method ->
       "${method.toJavaScriptString()}:function(payload){return invoke(${method.toJavaScriptString()},payload);}"
     }.orEmpty()
     val requestParser = """
@@ -113,7 +119,7 @@ internal data class IosScriptBridgeConfiguration(
         return { method: method, payload: requestPayload == null ? '' : String(requestPayload) };
       }
     """.trimIndent()
-    val promiseSupport = if (facade == null) {
+    val promiseSupport = if (bridgeFacade == null) {
       """
         function send(requestOrMethod, payload) {
           var request = parseRequest(requestOrMethod, payload);
@@ -155,7 +161,7 @@ internal data class IosScriptBridgeConfiguration(
         }
       """.trimIndent()
     }
-    val publicBridgeDefinition = if (facade == null) {
+    val publicBridgeDefinition = if (bridgeFacade == null) {
       """
         Object.defineProperty(window, ${bridge.name.toJavaScriptString()}, {
           value: Object.freeze({ postMessage: send }),
@@ -177,7 +183,7 @@ internal data class IosScriptBridgeConfiguration(
     }
     return """
       (function() {
-        if (window.location.protocol !== 'https:' || window.location.port !== '' || !($hostCheck)) return;
+        if (window.location.protocol !== 'https:' || (window.location.port !== '' && window.location.port !== '443') || !($hostCheck)) return;
         var handler = window.webkit && window.webkit.messageHandlers && window.webkit.messageHandlers[${transportName.toJavaScriptString()}];
         if (!handler) return;
         try {
@@ -196,22 +202,25 @@ internal data class IosScriptBridgeConfiguration(
       val bridgeNames = mutableSetOf<String>()
       val transportNames = mutableSetOf<String>()
       return bridges.map { bridge ->
+        val bridgeWithFacade = bridge as? ScriptBridgeWithFacade
+        val transportName = bridgeWithFacade?.transportName ?: bridge.name
+        val facade = bridgeWithFacade?.facade
         require(bridgeNamePattern.matches(bridge.name)) {
           "JS 桥名称必须是 ASCII JavaScript 标识符：${bridge.name}"
         }
         require(bridgeNames.add(bridge.name)) {
           "JS 桥名称不能重复：${bridge.name}"
         }
-        require(bridgeNamePattern.matches(bridge.transportName)) {
-          "JS 桥内部消息名称必须是 ASCII JavaScript 标识符：${bridge.transportName}"
+        require(bridgeNamePattern.matches(transportName)) {
+          "JS 桥内部消息名称必须是 ASCII JavaScript 标识符：$transportName"
         }
-        require(transportNames.add(bridge.transportName)) {
-          "JS 桥内部消息名称不能重复：${bridge.transportName}"
+        require(transportNames.add(transportName)) {
+          "JS 桥内部消息名称不能重复：$transportName"
         }
-        require(bridge.transportName == bridge.name || bridge.facade != null) {
-          "使用独立内部消息名称时必须声明 JS 桥门面：${bridge.name}"
+        require(bridgeWithFacade == null || transportName != bridge.name) {
+          "JS 桥方法门面必须使用独立内部消息名称：${bridge.name}"
         }
-        bridge.facade?.let { facade ->
+        facade?.let { facade ->
           require(facade.methodNames.isNotEmpty()) {
             "JS 桥门面必须声明至少一个方法：${bridge.name}"
           }
@@ -231,7 +240,7 @@ internal data class IosScriptBridgeConfiguration(
           }
           host.lowercase()
         }
-        IosScriptBridgeConfiguration(bridge, bridge.transportName, allowedHosts)
+        IosScriptBridgeConfiguration(bridge, transportName, facade, allowedHosts)
       }
     }
 
@@ -371,7 +380,7 @@ internal class IosScriptBridgeMessageHandler(
 }
 
 /** 将字符串编码为安全的 JavaScript 字符串字面量，供 WebKit 回包与注入脚本使用。 */
-private fun String.toJavaScriptString(): String {
+internal fun String.toJavaScriptString(): String {
   return buildString(length + 2) {
     append('"')
     for (character in this@toJavaScriptString) {
@@ -383,6 +392,8 @@ private fun String.toJavaScriptString(): String {
         '\n' -> append("\\n")
         '\r' -> append("\\r")
         '\t' -> append("\\t")
+        '\u2028' -> append("\\u2028")
+        '\u2029' -> append("\\u2029")
         else -> if (character.code < 0x20) {
           append("\\u")
           append(character.code.toString(16).padStart(4, '0'))

@@ -222,15 +222,8 @@ public final class io/github/multiweb/extension/PageStartedEvent {
 
 public abstract interface class io/github/multiweb/extension/ScriptBridge {
 	public abstract fun getAllowedHosts ()Ljava/util/Set;
-	public abstract fun getFacade ()Lio/github/multiweb/extension/ScriptBridgeFacade;
 	public abstract fun getName ()Ljava/lang/String;
-	public abstract fun getTransportName ()Ljava/lang/String;
 	public abstract fun handle (Lio/github/multiweb/extension/ScriptBridgeCall;)Lio/github/multiweb/extension/ScriptBridgeResponse;
-}
-
-public final class io/github/multiweb/extension/ScriptBridge$DefaultImpls {
-	public static fun getFacade (Lio/github/multiweb/extension/ScriptBridge;)Lio/github/multiweb/extension/ScriptBridgeFacade;
-	public static fun getTransportName (Lio/github/multiweb/extension/ScriptBridge;)Ljava/lang/String;
 }
 
 public final class io/github/multiweb/extension/ScriptBridgeCall {
@@ -272,6 +265,11 @@ public final class io/github/multiweb/extension/ScriptBridgeResponse {
 	public fun hashCode ()I
 	public final fun isSuccess ()Z
 	public fun toString ()Ljava/lang/String;
+}
+
+public abstract interface class io/github/multiweb/extension/ScriptBridgeWithFacade : io/github/multiweb/extension/ScriptBridge {
+	public abstract fun getFacade ()Lio/github/multiweb/extension/ScriptBridgeFacade;
+	public abstract fun getTransportName ()Ljava/lang/String;
 }
 
 public abstract interface class io/github/multiweb/extension/WebContextAction {

@@ -155,16 +155,22 @@ internal fun SampleWebViewScreen(
           modifier = Modifier.fillMaxWidth(),
           horizontalArrangement = Arrangement.spacedBy(8.dp),
         ) {
-          Button(onClick = {
-            presenter.goBack()
-            uiState = presenter.uiState
-          }) {
+          Button(
+            enabled = uiState.webViewState.canGoBack,
+            onClick = {
+              presenter.goBack()
+              uiState = presenter.uiState
+            },
+          ) {
             Text("返回")
           }
-          Button(onClick = {
-            presenter.goForward()
-            uiState = presenter.uiState
-          }) {
+          Button(
+            enabled = uiState.webViewState.canGoForward,
+            onClick = {
+              presenter.goForward()
+              uiState = presenter.uiState
+            },
+          ) {
             Text("前进")
           }
           Button(onClick = {

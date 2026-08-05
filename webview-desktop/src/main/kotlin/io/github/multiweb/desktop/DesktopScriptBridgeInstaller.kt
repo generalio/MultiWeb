@@ -2,7 +2,9 @@ package io.github.multiweb.desktop
 
 import io.github.multiweb.extension.ScriptBridge
 import io.github.multiweb.extension.ScriptBridgeCall
+import io.github.multiweb.extension.ScriptBridgeFacade
 import io.github.multiweb.extension.ScriptBridgeResponse
+import io.github.multiweb.extension.ScriptBridgeWithFacade
 import java.net.URI
 import java.net.URLDecoder
 import java.nio.charset.StandardCharsets
@@ -23,6 +25,8 @@ internal data class DesktopScriptBridgeConfiguration(
   val bridge: ScriptBridge,
   /** 平台消息通道使用的内部对象名称。 */
   val transportName: String,
+  /** 网页公开的受限方法门面；未声明时只暴露消息通道。 */
+  val facade: ScriptBridgeFacade?,
   /** 当前桥在页面中使用的查询函数名。 */
   val queryFunction: String,
   /** 规范化后的精确 HTTPS 主机名，仅匹配默认 HTTPS 端口 443。 */
@@ -50,7 +54,7 @@ internal data class DesktopScriptBridgeConfiguration(
     val queryFunction = queryFunction.toJavaScriptString()
     val transportScript = """
       (function() {
-        if (window.location.protocol !== 'https:' || window.location.port !== '' || !($hostExpression)) return;
+        if (window.location.protocol !== 'https:' || (window.location.port !== '' && window.location.port !== '443') || !($hostExpression)) return;
         var query = window[$queryFunction];
         if (typeof query !== 'function') return;
         try {
@@ -97,8 +101,8 @@ internal data class DesktopScriptBridgeConfiguration(
 
   /** 基于内部消息对象创建兼容旧方法名的 Promise 门面。 */
   private fun facadeInjectionScript(): String? {
-    val facade = bridge.facade ?: return null
-    val methods = facade.methodNames.joinToString(",") { method ->
+    val bridgeFacade = facade ?: return null
+    val methods = bridgeFacade.methodNames.joinToString(",") { method ->
       "${method.toJavaScriptString()}:function(payload){return nativeBridge.postMessage(JSON.stringify({method:${method.toJavaScriptString()},payload:payload == null ? '' : String(payload)}));}"
     }
     return """
@@ -127,22 +131,25 @@ internal data class DesktopScriptBridgeConfiguration(
       val bridgeNames = mutableSetOf<String>()
       val transportNames = mutableSetOf<String>()
       return bridges.map { bridge ->
+        val bridgeWithFacade = bridge as? ScriptBridgeWithFacade
+        val transportName = bridgeWithFacade?.transportName ?: bridge.name
+        val facade = bridgeWithFacade?.facade
         require(bridgeNamePattern.matches(bridge.name)) {
           "JS 桥名称必须是 ASCII JavaScript 标识符：${bridge.name}"
         }
         require(bridgeNames.add(bridge.name)) {
           "JS 桥名称不能重复：${bridge.name}"
         }
-        require(bridgeNamePattern.matches(bridge.transportName)) {
-          "JS 桥内部消息名称必须是 ASCII JavaScript 标识符：${bridge.transportName}"
+        require(bridgeNamePattern.matches(transportName)) {
+          "JS 桥内部消息名称必须是 ASCII JavaScript 标识符：$transportName"
         }
-        require(transportNames.add(bridge.transportName)) {
-          "JS 桥内部消息名称不能重复：${bridge.transportName}"
+        require(transportNames.add(transportName)) {
+          "JS 桥内部消息名称不能重复：$transportName"
         }
-        require(bridge.transportName == bridge.name || bridge.facade != null) {
-          "使用独立内部消息名称时必须声明 JS 桥门面：${bridge.name}"
+        require(bridgeWithFacade == null || transportName != bridge.name) {
+          "JS 桥方法门面必须使用独立内部消息名称：${bridge.name}"
         }
-        bridge.facade?.let { facade ->
+        facade?.let { facade ->
           require(facade.methodNames.isNotEmpty()) {
             "JS 桥门面必须声明至少一个方法：${bridge.name}"
           }
@@ -163,8 +170,9 @@ internal data class DesktopScriptBridgeConfiguration(
         }
         DesktopScriptBridgeConfiguration(
           bridge = bridge,
-          transportName = bridge.transportName,
-          queryFunction = "__multiweb_query_${bridge.transportName}",
+          transportName = transportName,
+          facade = facade,
+          queryFunction = "__multiweb_query_$transportName",
           allowedHosts = allowedHosts,
         )
       }
@@ -296,7 +304,7 @@ internal class DesktopScriptBridgeHandler(
 }
 
 /** 生成安全的 JavaScript/JSON 字符串字面量，避免桥响应内容破坏脚本上下文。 */
-private fun String.toJavaScriptString(): String {
+internal fun String.toJavaScriptString(): String {
   return buildString(length + 2) {
     append('"')
     for (character in this@toJavaScriptString) {
@@ -308,6 +316,8 @@ private fun String.toJavaScriptString(): String {
         '\n' -> append("\\n")
         '\r' -> append("\\r")
         '\t' -> append("\\t")
+        '\u2028' -> append("\\u2028")
+        '\u2029' -> append("\\u2029")
         else -> if (character.code < 0x20) {
           append("\\u%04x".format(character.code))
         } else {

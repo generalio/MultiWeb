@@ -101,7 +101,7 @@ class NativeWebViewBridgeExtension(
   private val bridgeName: String = "AndroidWebView",
 ) : WebViewExtension {
   override val scriptBridges: List<ScriptBridge> = listOf(
-    object : ScriptBridge {
+    object : ScriptBridgeWithFacade {
       override val name: String = bridgeName
       override val transportName: String = "__multiweb_${bridgeName}_transport"
       override val allowedHosts: Set<String> = this@NativeWebViewBridgeExtension.allowedHosts

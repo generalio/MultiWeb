@@ -8,7 +8,9 @@ import androidx.webkit.WebViewCompat
 import androidx.webkit.WebViewFeature
 import io.github.multiweb.extension.ScriptBridge
 import io.github.multiweb.extension.ScriptBridgeCall
+import io.github.multiweb.extension.ScriptBridgeFacade
 import io.github.multiweb.extension.ScriptBridgeResponse
+import io.github.multiweb.extension.ScriptBridgeWithFacade
 import org.json.JSONObject
 import java.net.URI
 
@@ -52,14 +54,16 @@ internal object AndroidScriptBridgeInstaller {
 internal data class AndroidScriptBridgeConfiguration(
   val bridge: ScriptBridge,
   val transportName: String,
+  /** 网页公开的受限方法门面；未声明时只暴露消息通道。 */
+  val facade: ScriptBridgeFacade?,
   /** 规范化后的精确 HTTPS 主机名，仅匹配默认 HTTPS 端口 443。 */
   val allowedHosts: Set<String>,
   val allowedOriginRules: Set<String>,
 ) {
   /** 生成受限来源的 Promise 门面；内部消息对象始终使用与网页名称不同的 [transportName]。 */
   fun facadeInjectionScript(): String? {
-    val facade = bridge.facade ?: return null
-    val methods = facade.methodNames.joinToString(",") { method ->
+    val bridgeFacade = facade ?: return null
+    val methods = bridgeFacade.methodNames.joinToString(",") { method ->
       "${method.toJavaScriptString()}:function(payload){return invoke(${method.toJavaScriptString()},payload);}"
     }
     return """
@@ -118,22 +122,25 @@ internal data class AndroidScriptBridgeConfiguration(
       val bridgeNames = mutableSetOf<String>()
       val transportNames = mutableSetOf<String>()
       return bridges.map { bridge ->
+        val bridgeWithFacade = bridge as? ScriptBridgeWithFacade
+        val transportName = bridgeWithFacade?.transportName ?: bridge.name
+        val facade = bridgeWithFacade?.facade
         require(bridgeNamePattern.matches(bridge.name)) {
           "JS 桥名称必须是 ASCII JavaScript 标识符：${bridge.name}"
         }
         require(bridgeNames.add(bridge.name)) {
           "JS 桥名称不能重复：${bridge.name}"
         }
-        require(bridgeNamePattern.matches(bridge.transportName)) {
-          "JS 桥内部消息名称必须是 ASCII JavaScript 标识符：${bridge.transportName}"
+        require(bridgeNamePattern.matches(transportName)) {
+          "JS 桥内部消息名称必须是 ASCII JavaScript 标识符：$transportName"
         }
-        require(transportNames.add(bridge.transportName)) {
-          "JS 桥内部消息名称不能重复：${bridge.transportName}"
+        require(transportNames.add(transportName)) {
+          "JS 桥内部消息名称不能重复：$transportName"
         }
-        require(bridge.transportName == bridge.name || bridge.facade != null) {
-          "使用独立内部消息名称时必须声明 JS 桥门面：${bridge.name}"
+        require(bridgeWithFacade == null || transportName != bridge.name) {
+          "JS 桥方法门面必须使用独立内部消息名称：${bridge.name}"
         }
-        bridge.facade?.let { facade ->
+        facade?.let { facade ->
           require(facade.methodNames.isNotEmpty()) {
             "JS 桥门面必须声明至少一个方法：${bridge.name}"
           }
@@ -155,7 +162,8 @@ internal data class AndroidScriptBridgeConfiguration(
         }
         AndroidScriptBridgeConfiguration(
           bridge = bridge,
-          transportName = bridge.transportName,
+          transportName = transportName,
+          facade = facade,
           allowedHosts = allowedHosts,
           allowedOriginRules = allowedHosts.mapTo(linkedSetOf()) { "https://$it" },
         )
@@ -248,7 +256,7 @@ private class AndroidScriptBridgeListener(
 }
 
 /** 使用纯 Kotlin 生成 JavaScript 字符串字面量，保证本地单元测试不依赖 Android 框架桩实现。 */
-private fun String.toJavaScriptString(): String {
+internal fun String.toJavaScriptString(): String {
   return buildString(length + 2) {
     append('"')
     for (character in this@toJavaScriptString) {
@@ -260,6 +268,8 @@ private fun String.toJavaScriptString(): String {
         '\n' -> append("\\n")
         '\r' -> append("\\r")
         '\t' -> append("\\t")
+        '\u2028' -> append("\\u2028")
+        '\u2029' -> append("\\u2029")
         else -> if (character.code < 0x20) {
           append("\\u")
           append(character.code.toString(16).padStart(4, '0'))
