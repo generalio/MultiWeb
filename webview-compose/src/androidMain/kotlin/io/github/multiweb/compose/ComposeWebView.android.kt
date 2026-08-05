@@ -29,7 +29,7 @@ actual fun rememberWebViewController(
   val context = LocalContext.current
   val lifecycleOwner = LocalLifecycleOwner.current
   val currentCallbacks by rememberUpdatedState(hostCallbacks)
-  val controller = remember(context, initialization) {
+  val controller = remember(context, initialization, lifecycleOwner) {
     AndroidWebViewController(
       context = context,
       initialization = initialization,

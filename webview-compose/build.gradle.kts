@@ -1,7 +1,15 @@
+import com.android.build.api.dsl.LibraryExtension
+
 plugins {
   id("multiweb.kmp-library")
   alias(libs.plugins.compose.multiplatform)
   alias(libs.plugins.kotlin.compose)
+}
+
+extensions.configure<LibraryExtension> {
+  defaultConfig {
+    testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+  }
 }
 
 kotlin {
@@ -15,6 +23,11 @@ kotlin {
     }
     commonTest.dependencies {
       implementation(kotlin("test"))
+    }
+    androidInstrumentedTest.dependencies {
+      implementation(libs.androidx.activity.compose)
+      implementation(libs.androidx.compose.ui.test.junit4)
+      implementation(libs.androidx.test.runner)
     }
     androidMain.dependencies {
       api(project(":webview-android"))
