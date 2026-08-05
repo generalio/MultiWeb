@@ -14,6 +14,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -25,6 +26,9 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import io.github.multiweb.api.WebViewController
 import io.github.multiweb.api.WebViewState
+import io.github.multiweb.compose.WebView
+import io.github.multiweb.compose.rememberWebViewController
+import io.github.multiweb.extension.WebViewInitialization
 import io.github.multiweb.sample.generated.resources.NotoSansCJKsc_Regular
 import io.github.multiweb.sample.generated.resources.Res
 import kotlinx.coroutines.delay
@@ -43,22 +47,50 @@ private fun sampleFontFamily(): FontFamily = FontFamily(
 )
 
 /**
- * 用于手动验证 MultiWeb 各平台实现的 Compose 示例界面。
+ * 创建并显示 MultiWeb 示例的公共 Compose 页面。
  *
- * [webViewContent] 由平台入口提供，确保公共界面不依赖 Android View、UIKit 或 Swing 类型；
- * [onWebViewStateChanged] 仅向平台宿主暴露状态快照，用于接入 Android 系统返回键等宿主级操作，
- * 不参与控制器的导航或生命周期管理。
+ * Controller 创建和原生 WebView 渲染均通过 common 的 Compose API 完成。平台入口只注入系统能力，例如 Android
+ * 返回键、iOS 状态栏、图片保存以及 Desktop JCEF 运行时；不得传入 Android View、UIKit 或 Swing 组件。
  */
 @Composable
-internal fun SampleWebViewScreen(
-  controller: WebViewController,
+internal fun SampleWebViewApp(
+  initialization: WebViewInitialization,
   isFullscreen: Boolean = false,
   pendingImageSaveUrl: String? = null,
   hostCapabilityNotice: String? = null,
   onImageSaveConfirmed: (String) -> Unit = {},
   onImageSaveDismissed: () -> Unit = {},
   onWebViewStateChanged: (WebViewState) -> Unit = {},
-  webViewContent: @Composable () -> Unit,
+  onWebViewControllerReady: (WebViewController) -> Unit = {},
+) {
+  val controller = rememberWebViewController(initialization)
+
+  DisposableEffect(controller) {
+    onWebViewControllerReady(controller)
+    onDispose {}
+  }
+
+  SampleWebViewScreen(
+    controller = controller,
+    isFullscreen = isFullscreen,
+    pendingImageSaveUrl = pendingImageSaveUrl,
+    hostCapabilityNotice = hostCapabilityNotice,
+    onImageSaveConfirmed = onImageSaveConfirmed,
+    onImageSaveDismissed = onImageSaveDismissed,
+    onWebViewStateChanged = onWebViewStateChanged,
+  )
+}
+
+/** 显示示例工具栏及由公共 Compose API 承载的 WebView。 */
+@Composable
+private fun SampleWebViewScreen(
+  controller: WebViewController,
+  isFullscreen: Boolean,
+  pendingImageSaveUrl: String?,
+  hostCapabilityNotice: String?,
+  onImageSaveConfirmed: (String) -> Unit,
+  onImageSaveDismissed: () -> Unit,
+  onWebViewStateChanged: (WebViewState) -> Unit,
 ) {
   val sampleFontFamily = sampleFontFamily()
   val presenter = remember(controller) { SampleWebViewPresenter(controller) }
@@ -111,7 +143,7 @@ internal fun SampleWebViewScreen(
     }
     if (isFullscreen) {
       Box(modifier = Modifier.fillMaxSize()) {
-        webViewContent()
+        WebView(controller, Modifier.fillMaxSize())
       }
     } else {
       Column(
@@ -235,7 +267,7 @@ internal fun SampleWebViewScreen(
             .fillMaxWidth()
             .weight(1f),
         ) {
-          webViewContent()
+          WebView(controller, Modifier.fillMaxSize())
         }
       }
     }

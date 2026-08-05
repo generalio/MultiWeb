@@ -3,7 +3,9 @@ agp = "8.7.3"
 kotlin = "2.1.21"
 compose = "1.9.3"
 androidxActivity = "1.8.2"
+androidxComposeUi = "1.9.4"
 androidxWebkit = "1.16.0"
+androidxTestRunner = "1.6.2"
 binaryCompatibilityValidator = "0.17.0"
 jcef = "146.0.10"
 
@@ -17,5 +19,7 @@ kotlin-multiplatform = { id = "org.jetbrains.kotlin.multiplatform", version.ref 
 
 [libraries]
 androidx-activity-compose = { module = "androidx.activity:activity-compose", version.ref = "androidxActivity" }
+androidx-compose-ui-test-junit4 = { module = "androidx.compose.ui:ui-test-junit4", version.ref = "androidxComposeUi" }
 androidx-webkit = { module = "androidx.webkit:webkit", version.ref = "androidxWebkit" }
+androidx-test-runner = { module = "androidx.test:runner", version.ref = "androidxTestRunner" }
 jcefmaven = { module = "me.friwi:jcefmaven", version.ref = "jcef" }

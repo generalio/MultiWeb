@@ -1,91 +1,105 @@
 # MultiWeb
 
-面向 Kotlin Multiplatform 的原生 WebView 组件库。目前包含 Android 系统 WebView、iOS
-WKWebView 与桌面 JCEF 实现；跨平台模型和导航策略位于 `webview-api`。正式构件发布到 Maven Central，
-坐标统一使用 `io.github.generalio.multiweb`。
+MultiWeb 是面向 Kotlin Multiplatform 的原生 WebView 组件库。它以统一的控制器、导航策略和安全配置，
+封装 Android 系统 WebView、iOS WKWebView、Desktop JCEF 与 JS/Wasm 浏览器跳转能力。
+
+## 能力概览
+
+| 平台 | 渲染方式 | 统一 Compose 入口 | 说明 |
+| --- | --- | --- | --- |
+| Android | 系统 WebView | 支持 | 自动转发生命周期，可使用受限 JS 桥。 |
+| iOS | WKWebView | 支持 | 使用 UIKit 嵌入，可使用受限 JS 桥。 |
+| Desktop | JCEF | 支持 | 宿主负责初始化和销毁进程级 JCEF。 |
+| JS / Wasm | 浏览器新窗口或标签页 | 不嵌入渲染 | 不持有浏览器 Cookie、缓存或 JS 桥。 |
+
+- 默认仅允许 HTTPS 导航，JavaScript、第三方 Cookie 与文件访问默认关闭。
+- 通过 `WebViewExtension` 监听页面事件、下载、上下文操作和宿主 UI 请求。
+- 通过精确 HTTPS 域名白名单向可信页面提供受限 JS 桥。
+- Compose Multiplatform 可在 `commonMain` 使用同一份控制器和视图代码。
+
+## 快速接入
+
+在 KMP 项目的 `commonMain` 添加统一入口模块：
+
+```kotlin
+commonMain.dependencies {
+  implementation("io.github.generalio.multiweb:webview-compose:<版本>")
+}
+```
+
+下面的页面代码可同时用于 Android、iOS 与 Desktop。JS/Wasm 会沿用同一控制器调用，但以浏览器新窗口或标签页
+打开地址，不会渲染内嵌视图。
+
+```kotlin
+@Composable
+fun HelpPage() {
+  val initialization = remember {
+    WebViewInitialization(
+      webViewConfig = WebViewConfig(
+        javaScriptEnabled = true,
+        // Desktop JCEF 无法按单个浏览器关闭这两项，跨平台配置需要显式确认。
+        thirdPartyCookiesEnabled = true,
+        persistentSessionEnabled = true,
+        allowedHosts = setOf("example.com"),
+      ),
+      navigationPolicy = DefaultNavigationPolicy,
+    )
+  }
+  val controller = rememberWebViewController(
+    initialization = initialization,
+    hostCallbacks = WebViewHostCallbacks(
+      onExternalNavigation = { request ->
+        // 按应用自身的路由或系统能力处理外部链接。
+      },
+    ),
+  )
+
+  LaunchedEffect(controller) {
+    controller.load(WebRequest("https://example.com"))
+  }
+
+  WebView(
+    controller = controller,
+    modifier = Modifier.fillMaxSize(),
+  )
+}
+```
+
+Desktop 在首次组合上述页面前，还需要由应用入口创建一次 JCEF 并注入运行时。`CefApp` 是进程级资源，
+MultiWeb 不会替宿主销毁它：
+
+```kotlin
+val cefApp = CefAppBuilder().build()
+
+DesktopWebViewRuntime.initialize(
+  cefApp = cefApp,
+  onBrowserClosed = {
+    // 确认没有其他浏览器后，由宿主调用 cefApp.dispose()。
+  },
+)
+```
+
+完整的依赖、初始化与各平台接入方式见[使用指南](docs/使用指南.md)。
 
 ## 模块
 
 | 模块 | 用途 |
 | --- | --- |
-| `webview-api` | 跨平台控制器、状态、请求和安全策略契约。 |
-| `webview-extension-api` | 跨平台页面事件、受信任域名 JS 桥、下载、上下文操作与宿主 UI 扩展契约。 |
+| `webview-compose` | KMP Compose 的统一 Controller 创建与原生视图入口。 |
+| `webview-api` | 跨平台控制器、状态、请求、安全配置与导航策略。 |
+| `webview-extension-api` | 页面事件、下载、上下文操作、宿主 UI 请求和受限 JS 桥。 |
 | `webview-android` | Android 系统 WebView 实现。 |
 | `webview-ios` | iOS WKWebView 实现。 |
-| `webview-desktop` | Swing/AWT JCEF 实现。 |
-| `webview-browser` | JS/Wasm 浏览器新窗口导航实现。 |
-| `webview-test-fixtures` | 工程内部契约测试夹具，不发布、不上传，使用方无需依赖。 |
-| `sample-compose` | 不发布的 Compose Multiplatform 集成示例。 |
+| `webview-desktop` | Desktop JCEF 实现。 |
+| `webview-browser` | JS/Wasm 浏览器新窗口或标签页实现。 |
 
-## 依赖
+大多数 Compose Multiplatform 项目只需要依赖 `webview-compose`。若应用不使用 Compose，按目标平台选择
+`webview-api`、`webview-extension-api` 与对应的平台实现模块即可。
 
-发布后，使用方只需配置 Maven Central，并按目标平台添加对应模块。所有平台都建议显式依赖
-`webview-api`；平台实现会传递它需要的扩展 API：
+## 文档
 
-```kotlin
-dependencies {
-  implementation("io.github.generalio.multiweb:webview-api:<version>")
-  implementation("io.github.generalio.multiweb:webview-android:<version>")
-}
-```
-
-桌面依赖：
-
-```kotlin
-implementation("io.github.generalio.multiweb:webview-api:<version>")
-implementation("io.github.generalio.multiweb:webview-desktop:<version>")
-```
-
-iOS 模块应添加到 KMP 的 `iosMain` source set：
-
-```kotlin
-iosMain.dependencies {
-  implementation("io.github.generalio.multiweb:webview-ios:<version>")
-}
-```
-
-桌面模块依赖 JCEF 原生运行时，宿主必须先初始化进程级 `CefApp`，再在 Swing EDT 中创建
-`DesktopWebViewController`。JS/Wasm 使用 `webview-browser`，只负责打开浏览器新窗口或新标签页：
-
-```kotlin
-jsMain.dependencies {
-  implementation("io.github.generalio.multiweb:webview-browser:<version>")
-}
-wasmJsMain.dependencies {
-  implementation("io.github.generalio.multiweb:webview-browser:<version>")
-}
-```
-
-JS/Wasm 使用 `webview-browser`。该模块按导航策略在浏览器新标签页或新窗口中打开 URL，不提供嵌入式
-WebView 或浏览器全局会话清理能力。
-
-Android 与 Desktop 控制器均可通过 `extensions` 安装页面事件、下载、上下文操作与受信任域名 JS 桥。
-Desktop 使用 JCEF `CefMessageRouter`，桥对象仅注入 HTTPS 精确主机名页面，并在原生回调中再次校验来源；
-释放控制器时会先注销桥路由，再关闭浏览器。Android 可额外通过 `webViewFactory` 注入业务自定义 `WebView`
-子类。控制器始终自行组合安全导航与原生 Client，业务代码不得覆盖 `WebViewClient`、`WebChromeClient` 或使用
-`addJavascriptInterface` 暴露桥对象。
-
-完整接入示例见 [使用指南](docs/usage.md)，架构边界见 [架构说明](docs/architecture.md)。
-
-发布和仓库配置见 [发布说明](docs/publishing.md)。
-
-本地开发流程见 [开发指南](docs/development.md)，二次开发和提 PR 见 [贡献指南](docs/contributing.md)。
-
-GitHub Packages 的正式版本由 `vX.Y.Z` Git 标签自动发布，详细版本管理流程同样见发布说明。
-
-## Compose 示例
-
-`sample-compose` 以同一套 Compose 界面分别接入 Android 系统 WebView、iOS WKWebView、桌面
-JCEF 与 JS/Wasm 浏览器新窗口实现。其公共命令逻辑使用内部 `FakeWebViewController` 测试；该测试夹具
-不会发布。原生运行时集成测试仍需要对应平台设备或宿主环境。常用构建命令：
-
-```shell
-./gradlew :sample-compose:assembleDebug :sample-compose:desktopTest
-```
-
-## 快速入口
-
-- [使用指南](docs/usage.md)：依赖、初始化、平台接入和扩展能力。
-- [架构说明](docs/architecture.md)：模块职责、安全边界和资源生命周期。
-- [开发指南](docs/development.md)：环境、构建、测试和版本流程。
-- [贡献指南](docs/contributing.md)：分支、提交、PR 和代码审查规范。
+- [使用指南](docs/使用指南.md)：统一接入、各平台嵌入方式和 API 参考。
+- [架构说明](docs/架构说明.md)：模块边界、安全模型和生命周期。
+- [开发指南](docs/开发指南.md)：本地构建、测试和开发流程。
+- [贡献指南](docs/贡献指南.md)：分支、提交、PR 与代码审查要求。
+- [发布说明](docs/发布说明.md)：维护者的版本与发布流程。

@@ -1,3 +1,4 @@
 # Binary Compatibility Validator 会在 API 基线末尾保留空行，禁止 Git 将其视为格式错误。
 webview-api/api/**/*.api whitespace=-blank-at-eol,-blank-at-eof
 webview-test-fixtures/api/**/*.api whitespace=-blank-at-eol,-blank-at-eof
+webview-compose/api/**/*.api whitespace=-blank-at-eol,-blank-at-eof
