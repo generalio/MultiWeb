@@ -32,8 +32,12 @@ import platform.WebKit.WKNavigation
 import platform.WebKit.WKNavigationAction
 import platform.WebKit.WKNavigationActionPolicy
 import platform.WebKit.WKNavigationDelegateProtocol
+import platform.WebKit.WKNavigationResponse
+import platform.WebKit.WKNavigationResponsePolicy
 import platform.WebKit.WKNavigationTypeOther
 import platform.WebKit.WKPreferences
+import platform.WebKit.WKContextMenuElementInfo
+import platform.WebKit.WKUIDelegateProtocol
 import platform.WebKit.WKWebView
 import platform.WebKit.WKWebViewConfiguration
 import platform.WebKit.WKWebpagePreferences
@@ -51,6 +55,8 @@ import platform.darwin.NSObject
  * [WebRequest.headers] 仅会附加到 HTTP(S) 请求；本地文件加载不适用请求头。
  *
  * [extensions] 只会接收平台事件和受限 JS 桥调用，不能替换内部导航代理或绕过 [WebViewConfig] 的安全策略。
+ * 不可由 WebKit 渲染的主框架响应会触发下载回调并取消当前导航，具体下载与保存仍由宿主完成。iOS 原生
+ * 上下文菜单只提供链接地址，不会为图片长按伪造不可靠的资源 URL。
  */
 @OptIn(ExperimentalForeignApi::class)
 class IosWebViewController(
@@ -80,6 +86,7 @@ class IosWebViewController(
 
   private val navigationDecider = IosNavigationDecider(config, navigationPolicy)
   private val navigationDelegate = IosNavigationDelegate(this)
+  private val uiDelegate = IosUiDelegate(this)
   /** JS 桥处理器必须与 WKWebView 同生命周期保存，避免被 Objective-C 运行时提前释放。 */
   private val scriptBridgeInstallation = IosScriptBridgeInstaller.create(
     enabled = config.javaScriptEnabled,
@@ -113,6 +120,7 @@ class IosWebViewController(
     )
     scriptBridgeInstallation.attach(view)
     view.navigationDelegate = navigationDelegate
+    view.UIDelegate = uiDelegate
   }
 
   override fun load(request: WebRequest) {
@@ -176,6 +184,7 @@ class IosWebViewController(
 
     view.stopLoading()
     view.navigationDelegate = null
+    view.UIDelegate = null
     scriptBridgeInstallation.dispose()
     view.removeFromSuperview()
     state = state.copy(isLoading = false)
@@ -247,6 +256,36 @@ class IosWebViewController(
     }
   }
 
+  /**
+   * 将 WebKit 不能渲染的主框架响应交给扩展处理。
+   *
+   * 公共扩展只传递下载元数据，没有隐式文件路径或权限模型；因此这里取消 WebKit 的内嵌导航，宿主可在
+   * [WebViewExtension.onDownloadRequested] 中自行发起受控下载。
+   */
+  private fun handleNavigationResponse(response: WKNavigationResponse): WKNavigationResponsePolicy {
+    if (!response.forMainFrame || response.canShowMIMEType) {
+      return WKNavigationResponsePolicy.WKNavigationResponsePolicyAllow
+    }
+
+    val webResponse = response.response
+    val downloadRequest = IosWebViewExtensionEventMapper.downloadRequest(
+      url = webResponse.URL?.absoluteString,
+      suggestedFileName = webResponse.suggestedFilename,
+      mimeType = webResponse.MIMEType,
+      contentLength = webResponse.expectedContentLength,
+    ) ?: return WKNavigationResponsePolicy.WKNavigationResponsePolicyAllow
+    extensions.forEach { extension -> extension.onDownloadRequested(downloadRequest) }
+    state = state.copy(isLoading = false)
+    return WKNavigationResponsePolicy.WKNavigationResponsePolicyCancel
+  }
+
+  /** 将 WebKit 原生菜单公开的链接地址转发给扩展，同时保留系统默认上下文菜单。 */
+  private fun handleContextAction(elementInfo: WKContextMenuElementInfo) {
+    IosWebViewExtensionEventMapper.contextAction(elementInfo.linkURL?.absoluteString)?.let { action ->
+      extensions.forEach { extension -> extension.onContextAction(action) }
+    }
+  }
+
   private fun handlePageStarted() {
     state = state.copy(
       url = view.URL?.absoluteString ?: state.url,
@@ -311,6 +350,15 @@ class IosWebViewController(
     @ObjCSignatureOverride
     override fun webView(
       webView: WKWebView,
+      decidePolicyForNavigationResponse: WKNavigationResponse,
+      decisionHandler: (WKNavigationResponsePolicy) -> Unit,
+    ) {
+      decisionHandler(controller.handleNavigationResponse(decidePolicyForNavigationResponse))
+    }
+
+    @ObjCSignatureOverride
+    override fun webView(
+      webView: WKWebView,
       didStartProvisionalNavigation: WKNavigation?,
     ) {
       controller.handlePageStarted()
@@ -340,6 +388,19 @@ class IosWebViewController(
       withError: NSError,
     ) {
       controller.handleNavigationError(withError)
+    }
+  }
+
+  /** 仅观察 WebKit 系统上下文菜单；不提供自定义配置，以保留系统默认菜单和预览行为。 */
+  private class IosUiDelegate(
+    private val controller: IosWebViewController,
+  ) : NSObject(), WKUIDelegateProtocol {
+    @ObjCSignatureOverride
+    override fun webView(
+      webView: WKWebView,
+      contextMenuWillPresentForElement: WKContextMenuElementInfo,
+    ) {
+      controller.handleContextAction(contextMenuWillPresentForElement)
     }
   }
 }
