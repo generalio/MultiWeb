@@ -5,7 +5,20 @@ import io.github.multiweb.api.WebViewController
 import io.github.multiweb.api.WebViewState
 
 /** 示例项目首次打开的 HTTPS 页面，符合默认导航策略。 */
-internal const val DefaultSampleUrl = "https://example.com"
+internal const val DefaultSampleUrl = "https://app.redrock.team"
+
+/** 页面尚未提供标题时展示的样例标题。 */
+internal const val DefaultSamplePageTitle = "网页"
+
+/**
+ * 计算样例标题栏应展示的标题。
+ *
+ * 平台可能在首帧或加载失败时尚未提供页面标题，空白标题也不适合作为窗口标题，因此统一回退到
+ * [DefaultSamplePageTitle]。保留有效标题的原始内容，避免改变网页声明的名称。
+ */
+internal fun samplePageTitle(state: WebViewState): String {
+  return state.title?.takeIf { title -> title.isNotBlank() } ?: DefaultSamplePageTitle
+}
 
 /**
  * 示例界面需要展示的浏览器状态。

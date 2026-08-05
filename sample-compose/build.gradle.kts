@@ -96,6 +96,7 @@ extensions.configure<KotlinMultiplatformExtension> {
       implementation(compose.ui)
       implementation(compose.components.resources)
       implementation(project(":webview-api"))
+      implementation(project(":webview-extension-api"))
     }
     commonTest.dependencies {
       implementation(kotlin("test"))

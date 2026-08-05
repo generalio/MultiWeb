@@ -1,6 +1,10 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
   <!-- Android WebView 加载 HTTPS 页面所需的最小网络权限。 -->
   <uses-permission android:name="android.permission.INTERNET" />
+  <!-- Android 9 及以下将确认后的图片写入公共图片目录时需要；Android 10+ 使用 MediaStore 路径无需该权限。 -->
+  <uses-permission
+    android:name="android.permission.WRITE_EXTERNAL_STORAGE"
+    android:maxSdkVersion="28" />
   <application android:theme="@style/Theme.MultiWebSample">
     <activity
       android:name=".MainActivity"

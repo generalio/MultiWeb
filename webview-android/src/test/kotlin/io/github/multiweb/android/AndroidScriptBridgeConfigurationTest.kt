@@ -2,12 +2,20 @@ package io.github.multiweb.android
 
 import io.github.multiweb.extension.ScriptBridge
 import io.github.multiweb.extension.ScriptBridgeCall
+import io.github.multiweb.extension.ScriptBridgeFacade
 import io.github.multiweb.extension.ScriptBridgeResponse
+import io.github.multiweb.extension.ScriptBridgeWithFacade
 import kotlin.test.Test
+import kotlin.test.assertContains
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
 
 class AndroidScriptBridgeConfigurationTest {
+  @Test
+  fun `JavaScript 字符串会转义行与段分隔符`() {
+    assertEquals("\"\\u2028\\u2029\"", "\u2028\u2029".toJavaScriptString())
+  }
+
   @Test
   fun `受信任主机只生成 HTTPS 精确来源规则`() {
     val configuration = AndroidScriptBridgeConfiguration.create(
@@ -40,6 +48,45 @@ class AndroidScriptBridgeConfigurationTest {
         ),
       )
     }
+  }
+
+  @Test
+  fun `方法门面必须使用独立传输对象`() {
+    assertFailsWith<IllegalArgumentException> {
+      AndroidScriptBridgeConfiguration.create(
+        listOf(
+          object : ScriptBridgeWithFacade {
+            override val name = "AndroidWebView"
+            override val transportName = "AndroidWebView"
+            override val allowedHosts = setOf("example.com")
+            override val facade = ScriptBridgeFacade(setOf("getToken"))
+
+            override fun handle(call: ScriptBridgeCall): ScriptBridgeResponse? = null
+          },
+        ),
+      )
+    }
+  }
+
+  @Test
+  fun `方法门面使用独立传输对象并在文档开始阶段生成 Promise 调用`() {
+    val configuration = AndroidScriptBridgeConfiguration.create(
+      listOf(
+        object : ScriptBridgeWithFacade {
+          override val name = "AndroidWebView"
+          override val transportName = "__multiweb_android_transport"
+          override val allowedHosts = setOf("example.com")
+          override val facade = ScriptBridgeFacade(setOf("getToken", "setFullscreen"))
+
+          override fun handle(call: ScriptBridgeCall): ScriptBridgeResponse? = null
+        },
+      ),
+    ).single()
+
+    assertEquals("__multiweb_android_transport", configuration.transportName)
+    assertContains(requireNotNull(configuration.facadeInjectionScript()), "nativeBridge.postMessage")
+    assertContains(requireNotNull(configuration.facadeInjectionScript()), "AndroidWebView")
+    assertContains(requireNotNull(configuration.facadeInjectionScript()), "getToken")
   }
 
   private fun bridge(name: String = "multiWeb", hosts: Set<String>): ScriptBridge {

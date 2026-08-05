@@ -15,6 +15,7 @@ import io.github.multiweb.extension.PageFinishedEvent
 import io.github.multiweb.extension.PageStartedEvent
 import io.github.multiweb.extension.WebContextAction
 import io.github.multiweb.extension.WebViewExtension
+import io.github.multiweb.extension.WebViewInitialization
 import java.awt.Component
 import java.util.concurrent.ConcurrentHashMap
 import javax.swing.SwingUtilities
@@ -60,6 +61,25 @@ class DesktopWebViewController(
   /** 可选的平台能力扩展；事件按列表顺序派发。 */
   private val extensions: List<WebViewExtension> = emptyList(),
 ) : WebViewController {
+  /**
+   * 使用跨平台初始化对象创建桌面控制器。
+   *
+   * JCEF 应用实例、外部导航和原生浏览器关闭时机仍由桌面宿主控制；这些进程级资源不能收进公共配置。
+   */
+  constructor(
+    cefApp: CefApp,
+    initialization: WebViewInitialization,
+    onExternalNavigation: (NavigationRequest) -> Unit = {},
+    onBrowserClosed: () -> Unit = {},
+  ) : this(
+    cefApp = cefApp,
+    config = initialization.webViewConfig,
+    navigationPolicy = initialization.navigationPolicy,
+    onExternalNavigation = onExternalNavigation,
+    onBrowserClosed = onBrowserClosed,
+    extensions = initialization.extensions,
+  )
+
   private val navigationDecider = DesktopNavigationDecider(config, navigationPolicy)
   /** 已在 [load] 中通过策略校验的主框架地址，供首次 JCEF 回调直接放行。 */
   private val pendingProgrammaticMainFrameUrls = ConcurrentHashMap.newKeySet<String>()

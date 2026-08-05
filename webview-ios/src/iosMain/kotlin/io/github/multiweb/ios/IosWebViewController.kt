@@ -13,6 +13,7 @@ import io.github.multiweb.extension.PageErrorEvent
 import io.github.multiweb.extension.PageFinishedEvent
 import io.github.multiweb.extension.PageStartedEvent
 import io.github.multiweb.extension.WebViewExtension
+import io.github.multiweb.extension.WebViewInitialization
 import kotlinx.cinterop.ExperimentalForeignApi
 import kotlinx.cinterop.ObjCSignatureOverride
 import platform.CoreGraphics.CGRectMake
@@ -58,6 +59,21 @@ class IosWebViewController(
   /** 可选的平台能力扩展；事件按列表顺序派发。 */
   private val extensions: List<WebViewExtension> = emptyList(),
 ) : WebViewController {
+  /**
+   * 使用跨平台初始化对象创建 iOS 控制器。
+   *
+   * 外部导航继续由 UIKit 宿主显式处理，公共初始化对象不会尝试推断应用的 URL Scheme 或路由策略。
+   */
+  constructor(
+    initialization: WebViewInitialization,
+    onExternalNavigation: (NavigationRequest) -> Unit = {},
+  ) : this(
+    config = initialization.webViewConfig,
+    navigationPolicy = initialization.navigationPolicy,
+    onExternalNavigation = onExternalNavigation,
+    extensions = initialization.extensions,
+  )
+
   private val navigationDecider = IosNavigationDecider(config, navigationPolicy)
   private val navigationDelegate = IosNavigationDelegate(this)
   /** JS 桥处理器必须与 WKWebView 同生命周期保存，避免被 Objective-C 运行时提前释放。 */
@@ -84,6 +100,7 @@ class IosWebViewController(
       frame = CGRectMake(0.0, 0.0, 0.0, 0.0),
       configuration = createConfiguration(),
     )
+    scriptBridgeInstallation.attach(view)
     view.navigationDelegate = navigationDelegate
   }
 

@@ -91,19 +91,45 @@ sealed interface HostUiRequest {
 /**
  * 可暴露给受信任网页的 JS 桥。
  *
- * 平台实现必须先校验当前主文档主机名位于 [allowedHosts]，再向网页暴露该桥。桥名称和方法名应使用
- * 业务命名空间，避免与页面脚本冲突；禁止向未受信任页面暴露任意原生对象。
+ * 平台实现必须先校验当前主文档主机名位于 [allowedHosts]，再向网页暴露该桥。桥名称和
+ * [ScriptBridgeWithFacade] 的方法名应使用业务命名空间，避免与页面脚本冲突；禁止向未受信任页面暴露任意原生对象。
  */
 interface ScriptBridge {
   /** 页面脚本访问该桥时使用的全局名称。 */
   val name: String
 
-  /** 允许使用该桥的主机名集合，不能为空且不支持通配符。 */
+  /** 允许使用该桥的主机名集合，不能为空且不支持通配符；仅匹配 HTTPS 默认端口 443。 */
   val allowedHosts: Set<String>
 
   /** 处理来自网页的显式方法调用，并返回可序列化的响应；不需要响应时返回 `null`。 */
   fun handle(call: ScriptBridgeCall): ScriptBridgeResponse?
 }
+
+/**
+ * 使用独立内部传输对象和受限方法门面的 JS 桥。
+ *
+ * 该能力单独建模，避免给既有 [ScriptBridge] 增加成员而破坏已编译实现的二进制兼容性。平台会把 [facade]
+ * 声明的方法转为 [ScriptBridge.handle] 调用，不会向网页暴露任意 Kotlin 对象；每个方法以 Promise 返回
+ * [ScriptBridgeResponse]。
+ */
+interface ScriptBridgeWithFacade : ScriptBridge {
+  /** 平台消息通道使用的内部全局名称，应与 [ScriptBridge.name] 不同。 */
+  val transportName: String
+
+  /** 可暴露给受信任网页的受限方法集合。 */
+  val facade: ScriptBridgeFacade
+}
+
+/**
+ * 暴露给网页的受限方法集合。
+ *
+ * 方法名称必须由平台实现校验为 JavaScript 标识符；调用参数统一转换为字符串，复杂参数应由调用方自行使用
+ * JSON 文本序列化并在 [ScriptBridge.handle] 中校验。
+ */
+data class ScriptBridgeFacade(
+  /** 可从网页调用的方法名称集合。 */
+  val methodNames: Set<String>,
+)
 
 /** JS 桥调用参数。 */
 data class ScriptBridgeCall(

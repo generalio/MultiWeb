@@ -2,7 +2,9 @@ package io.github.multiweb.desktop
 
 import io.github.multiweb.extension.ScriptBridge
 import io.github.multiweb.extension.ScriptBridgeCall
+import io.github.multiweb.extension.ScriptBridgeFacade
 import io.github.multiweb.extension.ScriptBridgeResponse
+import io.github.multiweb.extension.ScriptBridgeWithFacade
 import java.net.URI
 import java.net.URLDecoder
 import java.nio.charset.StandardCharsets
@@ -21,38 +23,60 @@ import org.cef.handler.CefMessageRouterHandlerAdapter
 internal data class DesktopScriptBridgeConfiguration(
   /** 业务桥定义。 */
   val bridge: ScriptBridge,
+  /** 平台消息通道使用的内部对象名称。 */
+  val transportName: String,
+  /** 网页公开的受限方法门面；未声明时只暴露消息通道。 */
+  val facade: ScriptBridgeFacade?,
   /** 当前桥在页面中使用的查询函数名。 */
   val queryFunction: String,
-  /** 规范化后的精确 HTTPS 主机名。 */
+  /** 规范化后的精确 HTTPS 主机名，仅匹配默认 HTTPS 端口 443。 */
   val allowedHosts: Set<String>,
 ) {
   /** 判断 JCEF 回调所在的主框架是否属于受信任来源。 */
   fun isAllowedUrl(url: String): Boolean {
     val parsed = runCatching { URI(url) }.getOrNull() ?: return false
     return parsed.scheme.equals("https", ignoreCase = true) &&
-      parsed.host?.lowercase() in allowedHosts
+      parsed.host?.lowercase() in allowedHosts &&
+      parsed.port in setOf(-1, 443)
   }
 
-  /** 仅在受信任主文档中定义桥对象，桥请求通过 CEF 异步查询回传 Promise。 */
+  /**
+   * 仅在受信任主文档中定义桥对象，桥请求通过 CEF 异步查询回传 Promise。
+   *
+   * 同时兼容 `postMessage(method, payload)` 和单参数 JSON 字符串，后者可与 Android 的 Web Message Listener
+   * 共用同一段网页脚本。
+   */
   fun injectionScript(): String {
     val hostExpression = allowedHosts.joinToString(" || ") { host ->
       "window.location.hostname === ${host.toJavaScriptString()}"
     }
-    val bridgeName = bridge.name.toJavaScriptString()
+    val transportName = transportName.toJavaScriptString()
     val queryFunction = queryFunction.toJavaScriptString()
-    return """
+    val transportScript = """
       (function() {
-        if (window.location.protocol !== 'https:' || !($hostExpression)) return;
+        if (window.location.protocol !== 'https:' || (window.location.port !== '' && window.location.port !== '443') || !($hostExpression)) return;
         var query = window[$queryFunction];
         if (typeof query !== 'function') return;
         try {
-          Object.defineProperty(window, $bridgeName, {
+          Object.defineProperty(window, $transportName, {
             value: Object.freeze({
-              postMessage: function(method, payload) {
+              postMessage: function(requestOrMethod, payload) {
+                var method = requestOrMethod;
+                var requestPayload = payload;
+                if (arguments.length === 1 && typeof requestOrMethod === 'string') {
+                  try {
+                    var request = JSON.parse(requestOrMethod);
+                    if (request && typeof request.method === 'string') {
+                      method = request.method;
+                      requestPayload = request.payload;
+                    }
+                  } catch (_) {}
+                }
+                if (typeof method !== 'string' || method.length === 0) return;
                 return new Promise(function(resolve, reject) {
                   query({
-                    request: encodeURIComponent(String(method)) + ':' +
-                      encodeURIComponent(payload == null ? '' : String(payload)),
+                    request: encodeURIComponent(method) + ':' +
+                      encodeURIComponent(requestPayload == null ? '' : String(requestPayload)),
                     persistent: false,
                     onSuccess: function(response) {
                       try { resolve(JSON.parse(response)); }
@@ -72,6 +96,31 @@ internal data class DesktopScriptBridgeConfiguration(
         } catch (_) {}
       })();
     """.trimIndent()
+    return transportScript + facadeInjectionScript().orEmpty()
+  }
+
+  /** 基于内部消息对象创建兼容旧方法名的 Promise 门面。 */
+  private fun facadeInjectionScript(): String? {
+    val bridgeFacade = facade ?: return null
+    val methods = bridgeFacade.methodNames.joinToString(",") { method ->
+      "${method.toJavaScriptString()}:function(payload){return nativeBridge.postMessage(JSON.stringify({method:${method.toJavaScriptString()},payload:payload == null ? '' : String(payload)}));}"
+    }
+    return """
+
+      (function() {
+        var nativeBridge = window[${transportName.toJavaScriptString()}];
+        if (!nativeBridge || typeof nativeBridge.postMessage !== 'function') return;
+        var facade = Object.freeze({$methods});
+        try {
+          Object.defineProperty(window, ${bridge.name.toJavaScriptString()}, {
+            value: facade,
+            enumerable: false,
+            writable: false,
+            configurable: false
+          });
+        } catch (_) {}
+      })();
+    """.trimIndent()
   }
 
   companion object {
@@ -80,12 +129,35 @@ internal data class DesktopScriptBridgeConfiguration(
     /** 校验桥名称和主机名，拒绝通配符、端口及非 ASCII 来源。 */
     fun create(bridges: List<ScriptBridge>): List<DesktopScriptBridgeConfiguration> {
       val bridgeNames = mutableSetOf<String>()
+      val transportNames = mutableSetOf<String>()
       return bridges.map { bridge ->
+        val bridgeWithFacade = bridge as? ScriptBridgeWithFacade
+        val transportName = bridgeWithFacade?.transportName ?: bridge.name
+        val facade = bridgeWithFacade?.facade
         require(bridgeNamePattern.matches(bridge.name)) {
           "JS 桥名称必须是 ASCII JavaScript 标识符：${bridge.name}"
         }
         require(bridgeNames.add(bridge.name)) {
           "JS 桥名称不能重复：${bridge.name}"
+        }
+        require(bridgeNamePattern.matches(transportName)) {
+          "JS 桥内部消息名称必须是 ASCII JavaScript 标识符：$transportName"
+        }
+        require(transportNames.add(transportName)) {
+          "JS 桥内部消息名称不能重复：$transportName"
+        }
+        require(bridgeWithFacade == null || transportName != bridge.name) {
+          "JS 桥方法门面必须使用独立内部消息名称：${bridge.name}"
+        }
+        facade?.let { facade ->
+          require(facade.methodNames.isNotEmpty()) {
+            "JS 桥门面必须声明至少一个方法：${bridge.name}"
+          }
+          facade.methodNames.forEach { methodName ->
+            require(bridgeNamePattern.matches(methodName)) {
+              "JS 桥门面方法必须是 ASCII JavaScript 标识符：$methodName"
+            }
+          }
         }
         require(bridge.allowedHosts.isNotEmpty()) {
           "JS 桥必须声明至少一个受信任主机：${bridge.name}"
@@ -98,7 +170,9 @@ internal data class DesktopScriptBridgeConfiguration(
         }
         DesktopScriptBridgeConfiguration(
           bridge = bridge,
-          queryFunction = "__multiweb_query_${bridge.name}",
+          transportName = transportName,
+          facade = facade,
+          queryFunction = "__multiweb_query_$transportName",
           allowedHosts = allowedHosts,
         )
       }
@@ -230,7 +304,7 @@ internal class DesktopScriptBridgeHandler(
 }
 
 /** 生成安全的 JavaScript/JSON 字符串字面量，避免桥响应内容破坏脚本上下文。 */
-private fun String.toJavaScriptString(): String {
+internal fun String.toJavaScriptString(): String {
   return buildString(length + 2) {
     append('"')
     for (character in this@toJavaScriptString) {
@@ -242,6 +316,8 @@ private fun String.toJavaScriptString(): String {
         '\n' -> append("\\n")
         '\r' -> append("\\r")
         '\t' -> append("\\t")
+        '\u2028' -> append("\\u2028")
+        '\u2029' -> append("\\u2029")
         else -> if (character.code < 0x20) {
           append("\\u%04x".format(character.code))
         } else {

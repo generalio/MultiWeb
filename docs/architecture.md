@@ -42,7 +42,7 @@ webview-test-fixtures ──> webview-api（仅工程内测试，不发布）
 
 - 默认导航策略只允许 HTTPS。需要自定义 Scheme、HTTP 或外部跳转时，必须显式实现 `NavigationPolicy`。
 - JavaScript、文件访问和第三方 Cookie 默认关闭。放宽任意一项前，应评估目标站点和平台差异。
-- `allowedHosts` 是精确主机名白名单，不支持通配符。JS 桥仅会对声明过的 HTTPS 主机注入，并在原生侧再次校验来源。
+- `allowedHosts` 是精确主机名白名单，不支持通配符。JS 桥仅会对声明过的 HTTPS 默认端口 `443` 注入，并在原生侧再次校验来源。
 - Android 不允许业务代码替换内部 `WebViewClient`、`WebChromeClient`，也禁止使用 `addJavascriptInterface`。
 - Desktop 对不能按单浏览器可靠限制的 JCEF 设置会显式拒绝创建，避免以不安全的进程级默认值静默运行。
 - JS/Wasm 由浏览器负责 Cookie、缓存和权限，`clearSession()` 会抛出异常而不是制造已清理的错误印象。
