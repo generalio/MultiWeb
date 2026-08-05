@@ -7,6 +7,10 @@ import io.github.multiweb.api.WebError
 import io.github.multiweb.api.WebRequest
 import io.github.multiweb.api.WebViewController
 import io.github.multiweb.api.WebViewState
+import io.github.multiweb.api.WebViewStateObservable
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
 
 /**
  * 用于契约测试的内存 WebView 控制器。
@@ -17,7 +21,7 @@ import io.github.multiweb.api.WebViewState
 class FakeWebViewController(
   /** 决定每次主框架导航的处理方式。默认允许所有地址，便于测试调用方逻辑。 */
   private val navigationPolicy: NavigationPolicy = NavigationPolicy { NavigationDecision.Allow },
-) : WebViewController {
+) : WebViewController, WebViewStateObservable {
   private val history = mutableListOf<WebRequest>()
   private var currentHistoryIndex = -1
 
@@ -32,8 +36,15 @@ class FakeWebViewController(
   var isDisposed: Boolean = false
     private set
 
-  override var state: WebViewState = WebViewState()
-    private set
+  private val mutableState = MutableStateFlow(WebViewState())
+
+  override var state: WebViewState
+    get() = mutableState.value
+    private set(value) {
+      mutableState.value = value
+    }
+
+  override val stateFlow: StateFlow<WebViewState> = mutableState.asStateFlow()
 
   override fun load(request: WebRequest) {
     ensureUsable()

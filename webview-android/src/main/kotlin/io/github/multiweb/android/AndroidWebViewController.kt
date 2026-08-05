@@ -24,6 +24,7 @@ import io.github.multiweb.api.WebRequest
 import io.github.multiweb.api.WebViewConfig
 import io.github.multiweb.api.WebViewController
 import io.github.multiweb.api.WebViewState
+import io.github.multiweb.api.WebViewStateObservable
 import io.github.multiweb.extension.DownloadRequest
 import io.github.multiweb.extension.PageErrorEvent
 import io.github.multiweb.extension.PageFinishedEvent
@@ -31,6 +32,9 @@ import io.github.multiweb.extension.PageStartedEvent
 import io.github.multiweb.extension.WebContextAction
 import io.github.multiweb.extension.WebViewExtension
 import io.github.multiweb.extension.WebViewInitialization
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
 
 /**
  * 基于系统 [WebView] 的 Android 控制器。
@@ -57,7 +61,7 @@ class AndroidWebViewController(
   private val extensions: List<WebViewExtension> = emptyList(),
   /** 创建原生 WebView 的工厂，可用于注入业务自定义 WebView 子类。 */
   private val webViewFactory: AndroidWebViewFactory = DefaultAndroidWebViewFactory,
-) : WebViewController {
+) : WebViewController, WebViewStateObservable {
   /**
    * 使用跨平台初始化对象创建 Android 控制器。
    *
@@ -91,8 +95,15 @@ class AndroidWebViewController(
   var isDisposed: Boolean = false
     private set
 
-  override var state: WebViewState = WebViewState()
-    private set
+  private val mutableState = MutableStateFlow(WebViewState())
+
+  override var state: WebViewState
+    get() = mutableState.value
+    private set(value) {
+      mutableState.value = value
+    }
+
+  override val stateFlow: StateFlow<WebViewState> = mutableState.asStateFlow()
 
   init {
     checkMainThread()

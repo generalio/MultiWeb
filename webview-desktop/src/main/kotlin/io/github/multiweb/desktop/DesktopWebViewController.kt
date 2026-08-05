@@ -9,6 +9,7 @@ import io.github.multiweb.api.WebRequest
 import io.github.multiweb.api.WebViewConfig
 import io.github.multiweb.api.WebViewController
 import io.github.multiweb.api.WebViewState
+import io.github.multiweb.api.WebViewStateObservable
 import io.github.multiweb.extension.DownloadRequest
 import io.github.multiweb.extension.PageErrorEvent
 import io.github.multiweb.extension.PageFinishedEvent
@@ -16,6 +17,9 @@ import io.github.multiweb.extension.PageStartedEvent
 import io.github.multiweb.extension.WebContextAction
 import io.github.multiweb.extension.WebViewExtension
 import io.github.multiweb.extension.WebViewInitialization
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
 import java.awt.Component
 import java.util.concurrent.ConcurrentHashMap
 import javax.swing.SwingUtilities
@@ -60,7 +64,7 @@ class DesktopWebViewController(
   private val onBrowserClosed: () -> Unit = {},
   /** 可选的平台能力扩展；事件按列表顺序派发。 */
   private val extensions: List<WebViewExtension> = emptyList(),
-) : WebViewController {
+) : WebViewController, WebViewStateObservable {
   /**
    * 使用跨平台初始化对象创建桌面控制器。
    *
@@ -108,10 +112,16 @@ class DesktopWebViewController(
   @Volatile
   private var isClientDisposed: Boolean = false
 
-  /** JCEF 回调可能来自非 EDT 线程，因此状态使用易变字段保证跨线程可见。 */
-  @Volatile
-  override var state: WebViewState = WebViewState()
-    private set
+  /** JCEF 回调可能来自非 EDT 线程，使用 StateFlow 安全发布状态快照给宿主。 */
+  private val mutableState = MutableStateFlow(WebViewState())
+
+  override var state: WebViewState
+    get() = mutableState.value
+    private set(value) {
+      mutableState.value = value
+    }
+
+  override val stateFlow: StateFlow<WebViewState> = mutableState.asStateFlow()
 
   init {
     checkEdt()

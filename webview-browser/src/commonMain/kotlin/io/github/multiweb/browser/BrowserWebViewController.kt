@@ -7,6 +7,10 @@ import io.github.multiweb.api.WebRequest
 import io.github.multiweb.api.WebViewConfig
 import io.github.multiweb.api.WebViewController
 import io.github.multiweb.api.WebViewState
+import io.github.multiweb.api.WebViewStateObservable
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
 
 /**
  * JS/Wasm 浏览器平台的链接控制器。
@@ -22,7 +26,7 @@ class BrowserWebViewController internal constructor(
   private val navigationPolicy: NavigationPolicy,
   /** 打开新浏览器上下文的实现；内部构造器允许契约测试替换该操作。 */
   private val openUrl: (String) -> Unit,
-) : WebViewController {
+) : WebViewController, WebViewStateObservable {
   /** 使用浏览器默认新窗口行为创建控制器。 */
   constructor(
     config: WebViewConfig = WebViewConfig(),
@@ -33,8 +37,15 @@ class BrowserWebViewController internal constructor(
   var isDisposed: Boolean = false
     private set
 
-  override var state: WebViewState = WebViewState()
-    private set
+  private val mutableState = MutableStateFlow(WebViewState())
+
+  override var state: WebViewState
+    get() = mutableState.value
+    private set(value) {
+      mutableState.value = value
+    }
+
+  override val stateFlow: StateFlow<WebViewState> = mutableState.asStateFlow()
 
   override fun load(request: WebRequest) {
     ensureUsable()

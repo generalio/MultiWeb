@@ -9,11 +9,15 @@ import io.github.multiweb.api.WebRequest
 import io.github.multiweb.api.WebViewConfig
 import io.github.multiweb.api.WebViewController
 import io.github.multiweb.api.WebViewState
+import io.github.multiweb.api.WebViewStateObservable
 import io.github.multiweb.extension.PageErrorEvent
 import io.github.multiweb.extension.PageFinishedEvent
 import io.github.multiweb.extension.PageStartedEvent
 import io.github.multiweb.extension.WebViewExtension
 import io.github.multiweb.extension.WebViewInitialization
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.cinterop.ExperimentalForeignApi
 import kotlinx.cinterop.ObjCSignatureOverride
 import platform.CoreGraphics.CGRectMake
@@ -58,7 +62,7 @@ class IosWebViewController(
   private val onExternalNavigation: (NavigationRequest) -> Unit = {},
   /** 可选的平台能力扩展；事件按列表顺序派发。 */
   private val extensions: List<WebViewExtension> = emptyList(),
-) : WebViewController {
+) : WebViewController, WebViewStateObservable {
   /**
    * 使用跨平台初始化对象创建 iOS 控制器。
    *
@@ -91,8 +95,15 @@ class IosWebViewController(
   var isDisposed: Boolean = false
     private set
 
-  override var state: WebViewState = WebViewState()
-    private set
+  private val mutableState = MutableStateFlow(WebViewState())
+
+  override var state: WebViewState
+    get() = mutableState.value
+    private set(value) {
+      mutableState.value = value
+    }
+
+  override val stateFlow: StateFlow<WebViewState> = mutableState.asStateFlow()
 
   init {
     checkMainThread()

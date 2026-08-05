@@ -16,6 +16,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -26,13 +27,12 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import io.github.multiweb.api.WebViewController
 import io.github.multiweb.api.WebViewState
+import io.github.multiweb.api.WebViewStateObservable
 import io.github.multiweb.compose.WebView
 import io.github.multiweb.compose.rememberWebViewController
 import io.github.multiweb.extension.WebViewInitialization
 import io.github.multiweb.sample.generated.resources.NotoSansCJKsc_Regular
 import io.github.multiweb.sample.generated.resources.Res
-import kotlinx.coroutines.delay
-import kotlinx.coroutines.isActive
 import org.jetbrains.compose.resources.Font
 
 /**
@@ -95,16 +95,18 @@ private fun SampleWebViewScreen(
   val sampleFontFamily = sampleFontFamily()
   val presenter = remember(controller) { SampleWebViewPresenter(controller) }
   var uiState by remember(controller) { mutableStateOf(presenter.uiState) }
+  val stateFlow = (controller as? WebViewStateObservable)?.stateFlow
+  val observedState = stateFlow?.collectAsState()
+  val controllerState = observedState?.value ?: controller.state
 
   LaunchedEffect(presenter) {
     presenter.loadInitialPage()
     uiState = presenter.uiState
-    while (isActive) {
-      delay(250)
-      if (presenter.refreshState()) {
-        uiState = presenter.uiState
-      }
-    }
+  }
+
+  LaunchedEffect(controllerState) {
+    presenter.updateWebViewState(controllerState)
+    uiState = presenter.uiState
   }
 
   LaunchedEffect(uiState.webViewState) {

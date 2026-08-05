@@ -129,3 +129,7 @@ public final class io/github/multiweb/api/WebViewState {
 	public fun toString ()Ljava/lang/String;
 }
 
+public abstract interface class io/github/multiweb/api/WebViewStateObservable {
+	public abstract fun getStateFlow ()Lkotlinx/coroutines/flow/StateFlow;
+}
+
