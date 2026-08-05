@@ -95,8 +95,8 @@ extensions.configure<KotlinMultiplatformExtension> {
       implementation(compose.material3)
       implementation(compose.ui)
       implementation(compose.components.resources)
-      implementation(project(":webview-api"))
       implementation(project(":webview-extension-api"))
+      implementation(project(":webview-compose"))
     }
     commonTest.dependencies {
       implementation(kotlin("test"))
@@ -104,20 +104,15 @@ extensions.configure<KotlinMultiplatformExtension> {
     }
     androidMain.dependencies {
       implementation(libs.androidx.activity.compose)
-      implementation(project(":webview-android"))
     }
     getByName("desktopMain").dependencies {
       implementation(compose.desktop.currentOs)
-      implementation(project(":webview-desktop"))
     }
     iosMain.dependencies {
-      implementation(project(":webview-ios"))
     }
     jsMain.dependencies {
-      implementation(project(":webview-browser"))
     }
     wasmJsMain.dependencies {
-      implementation(project(":webview-browser"))
     }
   }
 }

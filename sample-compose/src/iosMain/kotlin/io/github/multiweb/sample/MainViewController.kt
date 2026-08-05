@@ -2,17 +2,12 @@
 
 package io.github.multiweb.sample
 
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
-import androidx.compose.ui.Modifier
-import androidx.compose.ui.interop.UIKitView
 import androidx.compose.ui.window.ComposeUIViewController
 import io.github.multiweb.extension.HostUiRequest
-import io.github.multiweb.ios.IosWebViewController
 import kotlinx.cinterop.ObjCSignatureOverride
 import platform.Foundation.NSData
 import platform.Foundation.NSError
@@ -100,18 +95,8 @@ private class SampleIosWebViewHostViewController : UIViewController(nibName = nu
     val initialization = remember(extension, nativeBridgeExtension) {
       sampleWebViewInitialization(extensions = listOf(extension, nativeBridgeExtension))
     }
-    val controller = remember(initialization) {
-      IosWebViewController(
-        initialization = initialization,
-      )
-    }
-
-    DisposableEffect(controller) {
-      onDispose(controller::dispose)
-    }
-
-    SampleWebViewScreen(
-      controller = controller,
+    SampleWebViewApp(
+      initialization = initialization,
       isFullscreen = isFullscreen,
       pendingImageSaveUrl = pendingImageSaveUrl,
       hostCapabilityNotice = hostCapabilityNotice,
@@ -122,12 +107,7 @@ private class SampleIosWebViewHostViewController : UIViewController(nibName = nu
         }
       },
       onImageSaveDismissed = { pendingImageSaveUrl = null },
-    ) {
-      UIKitView(
-        factory = { controller.view },
-        modifier = Modifier.fillMaxSize(),
-      )
-    }
+    )
   }
 
   override fun viewDidLoad() {

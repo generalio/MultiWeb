@@ -1,20 +1,17 @@
 package io.github.multiweb.sample.desktop
 
-import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.ui.Modifier
-import androidx.compose.ui.awt.SwingPanel
 import androidx.compose.ui.window.Window
 import androidx.compose.ui.window.WindowPlacement
 import androidx.compose.ui.window.application
 import androidx.compose.ui.window.rememberWindowState
-import io.github.multiweb.desktop.DesktopWebViewController
+import io.github.multiweb.compose.DesktopWebViewRuntime
+import io.github.multiweb.api.WebViewController
 import io.github.multiweb.extension.HostUiRequest
-import io.github.multiweb.sample.SampleWebViewScreen
+import io.github.multiweb.sample.SampleWebViewApp
 import io.github.multiweb.sample.SampleWebViewExtension
 import io.github.multiweb.sample.sampleWebViewInitialization
 import io.github.multiweb.sample.sampleNativeWebViewBridgeExtension
@@ -83,18 +80,9 @@ fun main() = application {
       configureCefUserDataDirectory()
     }.build()
   }
-  val controller = remember {
-    val initialization = sampleWebViewInitialization(
-      extensions = listOf(extension, nativeBridgeExtension),
-    )
-    DesktopWebViewController(
+  remember(cefApp) {
+    DesktopWebViewRuntime.initialize(
       cefApp = cefApp,
-      initialization = initialization.copy(
-        webViewConfig = initialization.webViewConfig.copy(
-          thirdPartyCookiesEnabled = true,
-          persistentSessionEnabled = true,
-        ),
-      ),
       onBrowserClosed = {
         // JCEF 在原生关闭回调后才允许销毁进程级 CefApp，随后再结束 Compose 事件循环。
         SwingUtilities.invokeLater {
@@ -104,19 +92,28 @@ fun main() = application {
       },
     )
   }
+  val initialization = remember(extension, nativeBridgeExtension) {
+    sampleWebViewInitialization(
+      extensions = listOf(extension, nativeBridgeExtension),
+    ).let { commonInitialization ->
+      commonInitialization.copy(
+        webViewConfig = commonInitialization.webViewConfig.copy(
+          thirdPartyCookiesEnabled = true,
+          persistentSessionEnabled = true,
+        ),
+      )
+    }
+  }
+  var controller by remember { mutableStateOf<WebViewController?>(null) }
 
   Window(
     // 不直接退出 Compose；先等待 JCEF 确认浏览器关闭，避免 macOS AppKit 访问已释放的原生对象。
-    onCloseRequest = controller::dispose,
+    onCloseRequest = { controller?.dispose() },
     state = windowState,
     title = "MultiWeb Compose 示例",
   ) {
-    DisposableEffect(controller) {
-      onDispose(controller::dispose)
-    }
-
-    SampleWebViewScreen(
-      controller = controller,
+    SampleWebViewApp(
+      initialization = initialization,
       isFullscreen = isFullscreen,
       pendingImageSaveUrl = pendingImageSaveUrl,
       hostCapabilityNotice = hostCapabilityNotice,
@@ -127,12 +124,8 @@ fun main() = application {
         }
       },
       onImageSaveDismissed = { pendingImageSaveUrl = null },
-    ) {
-      SwingPanel(
-        factory = { controller.view },
-        modifier = Modifier.fillMaxSize(),
-      )
-    }
+      onWebViewControllerReady = { controller = it },
+    )
   }
 }
 

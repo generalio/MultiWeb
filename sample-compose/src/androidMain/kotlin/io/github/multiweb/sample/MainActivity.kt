@@ -14,7 +14,6 @@ import androidx.activity.compose.BackHandler
 import androidx.activity.compose.setContent
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
-import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -22,13 +21,10 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.viewinterop.AndroidView
 import androidx.core.content.ContextCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
-import androidx.lifecycle.DefaultLifecycleObserver
-import androidx.lifecycle.LifecycleOwner
-import io.github.multiweb.android.AndroidWebViewController
+import io.github.multiweb.api.WebViewController
 import io.github.multiweb.extension.HostUiRequest
 import java.io.File
 import java.io.FileOutputStream
@@ -94,18 +90,12 @@ class MainActivity : ComponentActivity() {
       val initialization = remember(extension, nativeBridgeExtension) {
         sampleWebViewInitialization(extensions = listOf(extension, nativeBridgeExtension))
       }
-      val controller = remember(initialization) {
-        AndroidWebViewController(
-          context = context,
-          initialization = initialization,
-        )
-      }
-      var canGoBack by remember(controller) { mutableStateOf(controller.state.canGoBack) }
-      val lifecycleOwner = this
+      var controller by remember { mutableStateOf<WebViewController?>(null) }
+      var canGoBack by remember(controller) { mutableStateOf(controller?.state?.canGoBack ?: false) }
 
       // 仅在存在网页历史时拦截系统返回键；无历史时交回 Activity 的默认退出逻辑。
-      BackHandler(enabled = canGoBack) {
-        controller.goBack()
+      BackHandler(enabled = canGoBack && controller != null) {
+        controller?.goBack()
       }
 
       LaunchedEffect(isFullscreen) {
@@ -119,26 +109,15 @@ class MainActivity : ComponentActivity() {
         }
       }
 
-      DisposableEffect(controller, lifecycleOwner) {
-        val observer = object : DefaultLifecycleObserver {
-          override fun onPause(owner: LifecycleOwner) {
-            controller.onHostPause()
-          }
-
-          override fun onResume(owner: LifecycleOwner) {
-            controller.onHostResume()
-          }
-        }
-        lifecycleOwner.lifecycle.addObserver(observer)
+      DisposableEffect(window) {
+        // 控制器会在离开组合时释放；此处仅恢复可能被全屏桥隐藏的系统栏。
         onDispose {
-          lifecycleOwner.lifecycle.removeObserver(observer)
           WindowInsetsControllerCompat(window, window.decorView).show(WindowInsetsCompat.Type.systemBars())
-          controller.dispose()
         }
       }
 
-      SampleWebViewScreen(
-        controller = controller,
+      SampleWebViewApp(
+        initialization = initialization,
         isFullscreen = isFullscreen,
         pendingImageSaveUrl = pendingImageSaveUrl,
         hostCapabilityNotice = hostCapabilityNotice,
@@ -161,12 +140,8 @@ class MainActivity : ComponentActivity() {
         onWebViewStateChanged = { state ->
           canGoBack = state.canGoBack
         },
-      ) {
-        AndroidView(
-          factory = { controller.view },
-          modifier = Modifier.fillMaxSize(),
-        )
-      }
+        onWebViewControllerReady = { controller = it },
+      )
     }
   }
 }
