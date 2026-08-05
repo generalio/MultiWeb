@@ -99,6 +99,11 @@ internal data class DesktopScriptBridgeConfiguration(
     return transportScript + facadeInjectionScript().orEmpty()
   }
 
+  /** 受限门面只允许其显式声明的方法；普通消息桥仍由桥自身定义可调用方法。 */
+  fun isMethodAllowed(method: String): Boolean {
+    return facade?.methodNames?.contains(method) ?: true
+  }
+
   /** 基于内部消息对象创建兼容旧方法名的 Promise 门面。 */
   private fun facadeInjectionScript(): String? {
     val bridgeFacade = facade ?: return null
@@ -271,6 +276,10 @@ internal class DesktopScriptBridgeHandler(
     val call = request.toScriptBridgeCall()
     if (call == null) {
       callback.failure(400, "invalid_request")
+      return true
+    }
+    if (!configuration.isMethodAllowed(call.method)) {
+      callback.success(ScriptBridgeResponse(isSuccess = false, errorCode = "method_not_allowed").toJson())
       return true
     }
     val response = runCatching { configuration.bridge.handle(call) }

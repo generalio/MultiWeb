@@ -21,8 +21,12 @@ import java.net.URI
  * 域名限制。消息桥仅允许 HTTPS 精确主机名、主框架页面与 JSON 文本协议。
  */
 internal object AndroidScriptBridgeInstaller {
-  fun install(webView: WebView, bridges: List<ScriptBridge>) {
-    if (bridges.isEmpty()) {
+  fun install(
+    webView: WebView,
+    javaScriptEnabled: Boolean,
+    bridges: List<ScriptBridge>,
+  ) {
+    if (!shouldInstallScriptBridges(javaScriptEnabled, bridges)) {
       return
     }
     require(WebViewFeature.isFeatureSupported(WebViewFeature.WEB_MESSAGE_LISTENER)) {
@@ -48,6 +52,14 @@ internal object AndroidScriptBridgeInstaller {
       }
     }
   }
+}
+
+/** JavaScript 关闭时绝不触碰平台桥 API，避免桥配置影响纯原生浏览场景。 */
+internal fun shouldInstallScriptBridges(
+  javaScriptEnabled: Boolean,
+  bridges: List<ScriptBridge>,
+): Boolean {
+  return javaScriptEnabled && bridges.isNotEmpty()
 }
 
 /** 经过安全校验的 Android JS 桥配置。 */
@@ -113,6 +125,11 @@ internal data class AndroidScriptBridgeConfiguration(
         } catch (_) {}
       })();
     """.trimIndent()
+  }
+
+  /** 受限门面只允许其显式声明的方法；普通消息桥仍由桥自身定义可调用方法。 */
+  fun isMethodAllowed(method: String): Boolean {
+    return facade?.methodNames?.contains(method) ?: true
   }
 
   companion object {
@@ -207,6 +224,12 @@ private class AndroidScriptBridgeListener(
     val parsedCall = message.data?.toScriptBridgeCall()
     if (parsedCall == null) {
       replyProxy.postMessage(failureResponse("invalid_request"))
+      return
+    }
+    if (!configuration.isMethodAllowed(parsedCall.call.method)) {
+      replyProxy.postMessage(
+        ScriptBridgeResponse(isSuccess = false, errorCode = "method_not_allowed").toJson(parsedCall.id),
+      )
       return
     }
 

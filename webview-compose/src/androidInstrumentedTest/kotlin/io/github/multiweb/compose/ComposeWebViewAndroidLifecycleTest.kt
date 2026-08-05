@@ -11,10 +11,13 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleOwner
 import androidx.lifecycle.LifecycleRegistry
 import androidx.lifecycle.compose.LocalLifecycleOwner
+import io.github.multiweb.android.AndroidWebViewController
 import io.github.multiweb.api.WebViewController
 import io.github.multiweb.extension.WebViewInitialization
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotSame
+import org.junit.Assert.assertNotNull
+import org.junit.Assert.assertNull
 import org.junit.Test
 
 class ComposeWebViewAndroidLifecycleTest {
@@ -22,7 +25,7 @@ class ComposeWebViewAndroidLifecycleTest {
   val composeRule = createAndroidComposeRule<ComponentActivity>()
 
   @Test
-  fun `LifecycleOwner 更换时会创建新的控制器`() {
+  fun lifecycleOwnerChangeRecreatesAndAttachesNewControllerView() {
     var lifecycleOwner by mutableStateOf<LifecycleOwner?>(null)
     val controllers = mutableListOf<WebViewController>()
 
@@ -30,6 +33,7 @@ class ComposeWebViewAndroidLifecycleTest {
       lifecycleOwner?.let { owner ->
         CompositionLocalProvider(LocalLifecycleOwner provides owner) {
           val controller = rememberWebViewController(WebViewInitialization())
+          WebView(controller)
           SideEffect {
             if (controllers.lastOrNull() !== controller) {
               controllers += controller
@@ -44,6 +48,9 @@ class ComposeWebViewAndroidLifecycleTest {
     }
     composeRule.waitForIdle()
 
+    val firstController = controllers.single() as AndroidWebViewController
+    assertNotNull(firstController.view.parent)
+
     composeRule.runOnIdle {
       lifecycleOwner = TestLifecycleOwner()
     }
@@ -51,6 +58,8 @@ class ComposeWebViewAndroidLifecycleTest {
 
     assertEquals(2, controllers.size)
     assertNotSame(controllers[0], controllers[1])
+    assertNull(firstController.view.parent)
+    assertNotNull((controllers[1] as AndroidWebViewController).view.parent)
   }
 }
 

@@ -195,6 +195,11 @@ internal data class IosScriptBridgeConfiguration(
     """.trimIndent()
   }
 
+  /** 受限门面只允许其显式声明的方法；普通消息桥仍由桥自身定义可调用方法。 */
+  fun isMethodAllowed(method: String): Boolean {
+    return facade?.methodNames?.contains(method) ?: true
+  }
+
   companion object {
     private val bridgeNamePattern = Regex("[A-Za-z_$][A-Za-z0-9_$]*")
 
@@ -291,6 +296,12 @@ internal class IosScriptBridgeMessageHandler(
     }
 
     val parsedCall = (didReceiveScriptMessage.body as? String)?.toScriptBridgeCall() ?: return
+    if (!configuration.isMethodAllowed(parsedCall.call.method)) {
+      parsedCall.id?.let { callId ->
+        reply(callId, ScriptBridgeResponse(isSuccess = false, errorCode = "method_not_allowed"))
+      }
+      return
+    }
     val response = runCatching { configuration.bridge.handle(parsedCall.call) }
       .getOrElse { ScriptBridgeResponse(isSuccess = false, errorCode = "bridge_exception") }
       ?: ScriptBridgeResponse(isSuccess = true)

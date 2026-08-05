@@ -3,6 +3,7 @@ package io.github.multiweb.compose
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.ui.Modifier
@@ -92,8 +93,10 @@ actual fun WebView(
 ) {
   val desktopController = controller as? DesktopWebViewController
     ?: error("WebView 必须接收 rememberWebViewController 创建的 Desktop 控制器。")
-  SwingPanel(
-    factory = { desktopController.view },
-    modifier = modifier,
-  )
+  key(controller) {
+    SwingPanel(
+      factory = { desktopController.view },
+      modifier = modifier,
+    )
+  }
 }

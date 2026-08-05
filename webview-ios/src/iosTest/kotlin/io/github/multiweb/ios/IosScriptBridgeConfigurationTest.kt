@@ -52,6 +52,25 @@ class IosScriptBridgeConfigurationTest {
     }
   }
 
+  @Test
+  fun `方法门面只允许声明的方法`() {
+    val configuration = IosScriptBridgeConfiguration.create(
+      listOf(
+        object : ScriptBridgeWithFacade {
+          override val name = "AndroidWebView"
+          override val transportName = "__multiweb_ios_transport"
+          override val allowedHosts = setOf("example.com")
+          override val facade = ScriptBridgeFacade(setOf("getToken"))
+
+          override fun handle(call: ScriptBridgeCall): ScriptBridgeResponse? = null
+        },
+      ),
+    ).single()
+
+    assertTrue(configuration.isMethodAllowed("getToken"))
+    assertFalse(configuration.isMethodAllowed("hiddenMethod"))
+  }
+
   private fun bridge(): ScriptBridge {
     return object : ScriptBridge {
       override val name: String = "multiWeb"
