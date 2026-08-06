@@ -19,9 +19,10 @@ import java.net.URI
 /**
  * 通过 AndroidX WebKit 的 Web Message Listener 安装受限来源的 JS 桥。
  *
- * 不使用 `addJavascriptInterface`：后者会把整个对象暴露给所有已加载页面，无法满足扩展 API 的精确
- * 域名限制。AndroidX WebKit 无法安全地表达“任意 HTTP/HTTPS 主机但排除其他来源”的规则，因此该平台仅支持
- * 精确 HTTPS 主机；不安全全来源策略会被明确拒绝。
+ * 不使用 `addJavascriptInterface`：后者会把整个对象暴露给所有已加载页面。精确 HTTPS 策略直接使用对应来源规则；
+ * 不安全兼容策略必须使用 AndroidX WebKit 的全来源 `*` 规则安装内部消息通道，因而该内部对象会进入全部框架。
+ * 此时网页门面仅在顶层 HTTP/HTTPS 页面创建，原生消息入口也会再次拒绝直接来自子框架、`file:`、`data:` 与自定义
+ * Scheme 的请求。
  */
 internal object AndroidScriptBridgeInstaller {
   fun install(
@@ -71,20 +72,29 @@ internal data class AndroidScriptBridgeConfiguration(
   val transportName: String,
   /** 网页公开的受限方法门面；未声明时只暴露消息通道。 */
   val facade: ScriptBridgeFacade?,
-  /** 当前桥的有效来源策略；Android 仅接受精确 HTTPS 主机策略。 */
-  val originPolicy: ScriptBridgeOriginPolicy.ExactHttpsHosts,
-  /** 规范化后的精确 HTTPS 主机名，仅匹配默认 HTTPS 端口 443。 */
+  /** 当前桥的有效来源策略；不安全模式只影响受限门面与原生消息的校验范围。 */
+  val originPolicy: ScriptBridgeOriginPolicy,
+  /** 规范化后的精确 HTTPS 主机名；不安全兼容策略时为空。 */
   val allowedHosts: Set<String>,
+  /** AndroidX WebKit 安装内部消息通道与门面脚本时使用的来源规则。 */
   val allowedOriginRules: Set<String>,
 ) {
-  /** 生成受限来源的 Promise 门面；内部消息对象始终使用与网页名称不同的 [transportName]。 */
+  /** 生成受限 Promise 门面；不安全模式下门面仅在顶层 HTTP/HTTPS 页面创建。 */
   fun facadeInjectionScript(): String? {
     val bridgeFacade = facade ?: return null
+    val originCheck = when (originPolicy) {
+      is ScriptBridgeOriginPolicy.ExactHttpsHosts -> "true"
+      ScriptBridgeOriginPolicy.UnsafeAnyHttpOrHttps -> {
+        "window.top === window && (window.location.protocol === 'http:' || " +
+          "window.location.protocol === 'https:') && window.location.hostname.length > 0"
+      }
+    }
     val methods = bridgeFacade.methodNames.joinToString(",") { method ->
       "${method.toJavaScriptString()}:function(payload){return invoke(${method.toJavaScriptString()},payload);}"
     }
     return """
       (function() {
+        if (!($originCheck)) return;
         var nativeBridge = window[${transportName.toJavaScriptString()}];
         if (!nativeBridge || typeof nativeBridge.postMessage !== 'function') return;
         var sequence = 0;
@@ -173,26 +183,34 @@ internal data class AndroidScriptBridgeConfiguration(
           }
         }
         val originPolicy = bridge.resolvedOriginPolicy()
-        require(originPolicy is ScriptBridgeOriginPolicy.ExactHttpsHosts) {
-          "Android System WebView 无法安全支持 UnsafeAnyHttpOrHttps；请配置精确 HTTPS 主机。"
-        }
-        require(originPolicy.hosts.isNotEmpty()) {
-          "JS 桥必须声明至少一个受信任主机：${bridge.name}"
-        }
-
-        val allowedHosts = originPolicy.hosts.mapTo(linkedSetOf()) { host ->
-          require(isValidHost(host)) {
-            "JS 桥只允许精确主机名且不支持通配符：$host"
+        val allowedHosts = when (originPolicy) {
+          is ScriptBridgeOriginPolicy.ExactHttpsHosts -> {
+            require(originPolicy.hosts.isNotEmpty()) {
+              "JS 桥必须声明至少一个受信任主机：${bridge.name}"
+            }
+            originPolicy.hosts.mapTo(linkedSetOf()) { host ->
+              require(isValidHost(host)) {
+                "JS 桥只允许精确主机名且不支持通配符：$host"
+              }
+              host.lowercase()
+            }
           }
-          host.lowercase()
+          ScriptBridgeOriginPolicy.UnsafeAnyHttpOrHttps -> emptySet()
+        }
+        val normalizedOriginPolicy = when (originPolicy) {
+          is ScriptBridgeOriginPolicy.ExactHttpsHosts -> ScriptBridgeOriginPolicy.ExactHttpsHosts(allowedHosts)
+          ScriptBridgeOriginPolicy.UnsafeAnyHttpOrHttps -> ScriptBridgeOriginPolicy.UnsafeAnyHttpOrHttps
         }
         AndroidScriptBridgeConfiguration(
           bridge = bridge,
           transportName = transportName,
           facade = facade,
-          originPolicy = ScriptBridgeOriginPolicy.ExactHttpsHosts(allowedHosts),
+          originPolicy = normalizedOriginPolicy,
           allowedHosts = allowedHosts,
-          allowedOriginRules = allowedHosts.mapTo(linkedSetOf()) { "https://$it" },
+          allowedOriginRules = when (normalizedOriginPolicy) {
+            is ScriptBridgeOriginPolicy.ExactHttpsHosts -> allowedHosts.mapTo(linkedSetOf()) { "https://$it" }
+            ScriptBridgeOriginPolicy.UnsafeAnyHttpOrHttps -> setOf("*")
+          },
         )
       }
     }
@@ -211,7 +229,7 @@ internal data class AndroidScriptBridgeConfiguration(
 /**
  * 复核脚本操作的当前主文档来源。
  *
- * 规则与 AndroidX 的桥注入规则一致：仅允许 HTTPS、精确主机及默认端口 443。该函数同时供消息桥和
+ * 精确策略与 AndroidX 的桥注入规则一致：仅允许 HTTPS、精确主机及默认端口 443。该函数同时供消息桥和
  * [io.github.multiweb.api.JavaScriptExecutor] 使用，避免两条执行路径的安全边界不一致。
  */
 internal fun isTrustedJavaScriptUrl(url: String?, allowedHosts: Set<String>): Boolean {
@@ -227,8 +245,8 @@ internal fun isTrustedJavaScriptUrl(url: String?, allowedHosts: Set<String>): Bo
 /**
  * Android 对策略化脚本执行的来源复核。
  *
- * [ScriptBridgeOriginPolicy.UnsafeAnyHttpOrHttps] 会返回 `false`，因为 AndroidX WebKit 没有同时限定任意 HTTP/HTTPS
- * 主机、排除 `file:`/`data:` 与子框架的来源规则，不能以全局 `*` 代替。
+ * 不安全策略允许带主机名的 HTTP/HTTPS 主文档。AndroidX WebKit 的内部通道会使用 `*` 规则，但该函数与消息
+ * 入口的主框架校验共同保证业务门面不在 `file:`、`data:`、自定义 Scheme 或子框架中生效。
  */
 internal fun isTrustedJavaScriptUrl(
   url: String?,
@@ -236,13 +254,20 @@ internal fun isTrustedJavaScriptUrl(
 ): Boolean {
   return when (originPolicy) {
     is ScriptBridgeOriginPolicy.ExactHttpsHosts -> isTrustedJavaScriptUrl(url, originPolicy.hosts)
-    ScriptBridgeOriginPolicy.UnsafeAnyHttpOrHttps -> false
+    ScriptBridgeOriginPolicy.UnsafeAnyHttpOrHttps -> {
+      val origin = url?.let { value -> runCatching { URI(value) }.getOrNull() } ?: return false
+      !origin.host.isNullOrBlank() &&
+        (origin.scheme.equals("http", ignoreCase = true) || origin.scheme.equals("https", ignoreCase = true))
+    }
   }
 }
 
-/** 复核来源与 AndroidX 注入规则一致：仅 HTTPS、精确主机及默认端口 443。 */
-private fun AndroidScriptBridgeConfiguration.isAllowedOrigin(origin: Uri): Boolean {
-  return isTrustedJavaScriptUrl(origin.toString(), originPolicy)
+/** 复核网页消息来源：不安全模式的内部对象虽注入全部框架，业务请求仍只接受顶层 HTTP/HTTPS 页面。 */
+internal fun AndroidScriptBridgeConfiguration.isAllowedMessageOrigin(
+  origin: Uri,
+  isMainFrame: Boolean,
+): Boolean {
+  return isMainFrame && isTrustedJavaScriptUrl(origin.toString(), originPolicy)
 }
 
 /** 将受限来源的网页消息转换为 [ScriptBridge] 调用。 */
@@ -256,7 +281,7 @@ private class AndroidScriptBridgeListener(
     isMainFrame: Boolean,
     replyProxy: JavaScriptReplyProxy,
   ) {
-    if (!isMainFrame || !configuration.isAllowedOrigin(sourceOrigin)) {
+    if (!configuration.isAllowedMessageOrigin(sourceOrigin, isMainFrame)) {
       replyProxy.postMessage(failureResponse("untrusted_origin"))
       return
     }
