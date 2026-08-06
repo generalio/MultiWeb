@@ -139,7 +139,7 @@ class NativeWebViewBridgeExtension(
   private var enableLegacyJavaScriptExecution: Boolean = false
   /** 生命周期绑定的脚本执行器；控制器释放后必须清空。 */
   private var javaScriptExecutor: JavaScriptExecutor? = null
-  /** 网页最后声明的页面完成脚本；新值会覆盖旧值，避免多次加载累积执行。 */
+  /** 网页最后声明的页面完成脚本；新值会覆盖旧值，并在下一次页面完成回调后清空。 */
   private var pageLoadScript: String? = null
 
   override val scriptBridges: List<ScriptBridge> = listOf(
@@ -169,6 +169,8 @@ class NativeWebViewBridgeExtension(
       return
     }
     val script = pageLoadScript ?: return
+    // 页面完成事件可能重复派发；先清空保证同一份旧页面脚本至多提交一次。
+    pageLoadScript = null
     javaScriptExecutor?.executeJavaScript(script, allowedHosts)
   }
 

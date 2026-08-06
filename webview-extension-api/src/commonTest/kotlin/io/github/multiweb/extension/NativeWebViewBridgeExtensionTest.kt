@@ -96,7 +96,7 @@ class NativeWebViewBridgeExtensionTest {
   }
 
   @Test
-  fun `开启后仅执行最新页面脚本并绕过宿主`() {
+  fun `开启后仅在首次页面完成时执行最新脚本并绕过宿主`() {
     val requests = mutableListOf<NativeWebViewBridgeRequest>()
     val extension = NativeWebViewBridgeExtension(
       allowedHosts = setOf("app.example.com"),
@@ -112,6 +112,7 @@ class NativeWebViewBridgeExtensionTest {
 
     assertTrue(requireNotNull(bridge.handle(ScriptBridgeCall("onLoad", "window.first()"))).isSuccess)
     assertTrue(requireNotNull(bridge.handle(ScriptBridgeCall("onLoad", "window.latest()"))).isSuccess)
+    extension.onPageFinished(PageFinishedEvent("https://app.example.com/home"))
     extension.onPageFinished(PageFinishedEvent("https://app.example.com/home"))
     assertTrue(requireNotNull(bridge.handle(ScriptBridgeCall("exeJs", "window.now()"))).isSuccess)
 
