@@ -29,6 +29,17 @@ class AndroidScriptBridgeConfigurationTest {
   }
 
   @Test
+  fun `脚本执行仅接受可信 HTTPS 默认端口主文档`() {
+    val allowedHosts = setOf("EXAMPLE.com")
+
+    assertEquals(true, isTrustedJavaScriptUrl("https://example.com/page", allowedHosts))
+    assertEquals(true, isTrustedJavaScriptUrl("https://example.com:443/page", allowedHosts))
+    assertEquals(false, isTrustedJavaScriptUrl("https://example.com:8443/page", allowedHosts))
+    assertEquals(false, isTrustedJavaScriptUrl("http://example.com/page", allowedHosts))
+    assertEquals(false, isTrustedJavaScriptUrl("https://example.com/page", emptySet()))
+  }
+
+  @Test
   fun `拒绝不安全桥名称和通配符主机`() {
     assertFailsWith<IllegalArgumentException> {
       AndroidScriptBridgeConfiguration.create(listOf(bridge(name = "multi-web", hosts = setOf("example.com"))))

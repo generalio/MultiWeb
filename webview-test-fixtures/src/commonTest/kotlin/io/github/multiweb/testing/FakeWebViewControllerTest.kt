@@ -5,6 +5,14 @@ import io.github.multiweb.api.NavigationPolicy
 import io.github.multiweb.api.WebError
 import io.github.multiweb.api.WebErrorCategory
 import io.github.multiweb.api.WebRequest
+import io.github.multiweb.api.WebViewState
+import io.github.multiweb.api.WebViewStateObservable
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.take
+import kotlinx.coroutines.flow.toList
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.runBlocking
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
@@ -14,6 +22,23 @@ import kotlin.test.assertTrue
 import kotlin.test.assertFailsWith
 
 class FakeWebViewControllerTest {
+  @Test
+  fun `状态流会在页面状态改变时发出最新快照`() {
+    val controller = FakeWebViewController()
+    assertIs<WebViewStateObservable>(controller)
+    val receivedStates = mutableListOf<WebViewState>()
+    val collection = CoroutineScope(Dispatchers.Unconfined).launch {
+      controller.stateFlow.take(2).toList(receivedStates)
+    }
+
+    controller.load(WebRequest("https://example.com/home"))
+    runBlocking { collection.join() }
+
+    assertEquals("https://example.com/home", controller.stateFlow.value.url)
+    assertEquals(controller.state, controller.stateFlow.value)
+    assertEquals(listOf(null, "https://example.com/home"), receivedStates.map { state -> state.url })
+  }
+
   @Test
   fun `允许导航时更新状态并记录页面请求`() {
     val controller = FakeWebViewController()

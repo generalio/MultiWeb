@@ -1,6 +1,7 @@
 package io.github.multiweb.android
 
 import android.content.Context
+import android.net.Uri
 import android.net.http.SslError
 import android.os.Build
 import android.os.Looper
@@ -8,6 +9,7 @@ import android.view.View
 import android.webkit.CookieManager
 import android.webkit.RenderProcessGoneDetail
 import android.webkit.SslErrorHandler
+import android.webkit.ValueCallback
 import android.webkit.WebChromeClient
 import android.webkit.WebResourceError
 import android.webkit.WebResourceRequest
@@ -18,19 +20,29 @@ import android.webkit.WebViewClient
 import io.github.multiweb.api.NavigationDecision
 import io.github.multiweb.api.NavigationPolicy
 import io.github.multiweb.api.NavigationRequest
+import io.github.multiweb.api.JavaScriptExecutor
 import io.github.multiweb.api.WebError
 import io.github.multiweb.api.WebErrorCategory
 import io.github.multiweb.api.WebRequest
 import io.github.multiweb.api.WebViewConfig
 import io.github.multiweb.api.WebViewController
 import io.github.multiweb.api.WebViewState
+import io.github.multiweb.api.WebViewStateObservable
 import io.github.multiweb.extension.DownloadRequest
 import io.github.multiweb.extension.PageErrorEvent
 import io.github.multiweb.extension.PageFinishedEvent
 import io.github.multiweb.extension.PageStartedEvent
 import io.github.multiweb.extension.WebContextAction
+import io.github.multiweb.extension.WebFileChooserHandler
+import io.github.multiweb.extension.WebFileChooserMode
+import io.github.multiweb.extension.WebFileChooserRequest
+import io.github.multiweb.extension.WebFileChooserResult
 import io.github.multiweb.extension.WebViewExtension
+import io.github.multiweb.extension.WebViewControllerLifecycleExtension
 import io.github.multiweb.extension.WebViewInitialization
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
 
 /**
  * 基于系统 [WebView] 的 Android 控制器。
@@ -57,7 +69,7 @@ class AndroidWebViewController(
   private val extensions: List<WebViewExtension> = emptyList(),
   /** 创建原生 WebView 的工厂，可用于注入业务自定义 WebView 子类。 */
   private val webViewFactory: AndroidWebViewFactory = DefaultAndroidWebViewFactory,
-) : WebViewController {
+) : WebViewController, WebViewStateObservable, JavaScriptExecutor {
   /**
    * 使用跨平台初始化对象创建 Android 控制器。
    *
@@ -79,6 +91,8 @@ class AndroidWebViewController(
   )
 
   private val navigationDecider = AndroidNavigationDecider(config, navigationPolicy)
+  /** 文件选择扩展至多一个；缺失时网页请求必须显式取消。 */
+  private val fileChooserHandler = extensions.filterIsInstance<WebFileChooserHandler>().singleOrNull()
 
   /**
    * 供宿主添加到界面层级的原生 WebView。
@@ -91,16 +105,32 @@ class AndroidWebViewController(
   var isDisposed: Boolean = false
     private set
 
-  override var state: WebViewState = WebViewState()
-    private set
+  private val mutableState = MutableStateFlow(WebViewState())
+
+  override var state: WebViewState
+    get() = mutableState.value
+    private set(value) {
+      mutableState.value = value
+    }
+
+  override val stateFlow: StateFlow<WebViewState> = mutableState.asStateFlow()
+
+  /** 当前尚未完成的原生文件选择回调；同一时间只能保留一个。 */
+  private var activeFileChooserCallback: ValueCallback<Array<Uri>>? = null
 
   init {
     checkMainThread()
     require(config.persistentSessionEnabled) {
       "AndroidWebViewController 暂不支持隔离的临时会话。"
     }
+    require(extensions.count { extension -> extension is WebFileChooserHandler } <= 1) {
+      "WebViewInitialization.extensions 最多只能配置一个 WebFileChooserHandler。"
+    }
 
     view = webViewFactory.create(context).also(::configureWebView)
+    extensions.filterIsInstance<WebViewControllerLifecycleExtension>().forEach { extension ->
+      extension.onControllerAttached(this)
+    }
   }
 
   override fun load(request: WebRequest) {
@@ -165,6 +195,22 @@ class AndroidWebViewController(
     )
   }
 
+  /**
+   * 向当前受信任主文档提交脚本。
+   *
+   * 不在主线程、控制器已释放或当前页面不符合 [allowedHosts] 时不执行，避免异步扩展绕过桥的来源边界。
+   */
+  override fun executeJavaScript(script: String, allowedHosts: Set<String>): Boolean {
+    if (Looper.myLooper() != Looper.getMainLooper() || isDisposed) {
+      return false
+    }
+    if (!isTrustedJavaScriptUrl(view.url, allowedHosts)) {
+      return false
+    }
+    view.evaluateJavascript(script, null)
+    return true
+  }
+
   /** 通知 WebView 宿主进入暂停状态。 */
   fun onHostPause() {
     ensureUsable()
@@ -183,13 +229,19 @@ class AndroidWebViewController(
       return
     }
 
+    // 先切换状态，保证扩展释放过程中不能再向即将销毁的 WebView 提交脚本。
+    isDisposed = true
+    extensions.filterIsInstance<WebViewControllerLifecycleExtension>().forEach { extension ->
+      extension.onControllerDisposed()
+    }
+    activeFileChooserCallback?.onReceiveValue(null)
+    activeFileChooserCallback = null
     view.stopLoading()
     view.loadUrl("about:blank")
     view.clearHistory()
     view.removeAllViews()
     view.destroy()
     state = state.copy(isLoading = false)
-    isDisposed = true
   }
 
   private fun configureWebView(webView: WebView) {
@@ -356,7 +408,70 @@ class AndroidWebViewController(
       override fun onReceivedTitle(view: WebView, title: String?) {
         state = state.copy(title = title)
       }
+
+      override fun onShowFileChooser(
+        webView: WebView,
+        filePathCallback: ValueCallback<Array<Uri>>,
+        fileChooserParams: FileChooserParams,
+      ): Boolean {
+        activeFileChooserCallback?.onReceiveValue(null)
+        activeFileChooserCallback = filePathCallback
+        val request = WebFileChooserRequest(
+          acceptTypes = fileChooserParams.acceptTypes.filter(String::isNotBlank),
+          mode = if (fileChooserParams.mode == FileChooserParams.MODE_SAVE) {
+            WebFileChooserMode.Save
+          } else {
+            WebFileChooserMode.Open
+          },
+          allowMultipleSelection = fileChooserParams.mode == FileChooserParams.MODE_OPEN_MULTIPLE,
+          // Android API 35 及以下未公开目录模式，不能依赖隐藏常量伪造该能力。
+          allowDirectories = false,
+        )
+        val handler = fileChooserHandler
+        if (handler == null) {
+          completeFileChooser(filePathCallback, request, WebFileChooserResult.Cancelled)
+          return true
+        }
+
+        try {
+          handler.onFileChooserRequested(request) { result ->
+            completeFileChooser(filePathCallback, request, result)
+          }
+        } catch (_: Exception) {
+          // 宿主处理异常不能令网页获得未校验的文件访问能力，按取消处理。
+          completeFileChooser(filePathCallback, request, WebFileChooserResult.Cancelled)
+        }
+        return true
+      }
     }
+  }
+
+  /** 在主线程且仅针对仍活跃的请求回传一次文件选择结果。 */
+  private fun completeFileChooser(
+    callback: ValueCallback<Array<Uri>>,
+    request: WebFileChooserRequest,
+    result: WebFileChooserResult,
+  ) {
+    view.post {
+      if (activeFileChooserCallback !== callback) {
+        return@post
+      }
+      activeFileChooserCallback = null
+      callback.onReceiveValue(result.toAndroidUris(request))
+    }
+  }
+
+  /** Android WebView 只接收系统文档提供者返回的 `content://` URI。 */
+  private fun WebFileChooserResult.toAndroidUris(request: WebFileChooserRequest): Array<Uri>? {
+    val selected = this as? WebFileChooserResult.Selected ?: return null
+    if (!request.allowMultipleSelection && selected.uris.size > 1) {
+      return null
+    }
+    val uris = selected.uris.map(Uri::parse)
+    if (uris.any { uri -> uri.scheme != "content" || uri.authority.isNullOrBlank() }) {
+      return null
+    }
+    return uris.toTypedArray()
   }
 
   private fun updateError(

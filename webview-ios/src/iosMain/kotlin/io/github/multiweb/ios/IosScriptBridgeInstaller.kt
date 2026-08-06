@@ -88,10 +88,7 @@ internal data class IosScriptBridgeConfiguration(
 
   /** 判断 WKWebView 当前主文档是否仍属于当前桥的受信任来源。 */
   fun isAllowedUrl(url: String): Boolean {
-    val parsed = NSURL(string = url)
-    return parsed.scheme?.lowercase() == "https" &&
-      parsed.host?.lowercase() in allowedHosts &&
-      (parsed.port?.intValue ?: 443) == 443
+    return isTrustedJavaScriptUrl(url, allowedHosts)
   }
 
   fun injectionScript(): String {
@@ -260,6 +257,23 @@ internal data class IosScriptBridgeConfiguration(
       return NSURL(string = "https://$normalizedHost").host == normalizedHost
     }
   }
+}
+
+/**
+ * 复核脚本操作的当前主文档来源。
+ *
+ * 规则与 WKWebView 桥注入和消息回传保持一致：仅允许 HTTPS、精确主机及默认端口 443。该函数同时供消息桥和
+ * [io.github.multiweb.api.JavaScriptExecutor] 使用，避免两条执行路径的安全边界不一致。
+ */
+@OptIn(ExperimentalForeignApi::class)
+internal fun isTrustedJavaScriptUrl(url: String?, allowedHosts: Set<String>): Boolean {
+  if (url == null || allowedHosts.isEmpty()) {
+    return false
+  }
+  val parsed = NSURL(string = url)
+  return parsed.scheme?.lowercase() == "https" &&
+    parsed.host?.lowercase() in allowedHosts.mapTo(hashSetOf()) { it.lowercase() } &&
+    (parsed.port?.intValue ?: 443) == 443
 }
 
 /** 在原生侧复核来源并分发网页命令，不能仅依赖注入脚本的前置判断。 */

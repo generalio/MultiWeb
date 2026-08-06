@@ -38,8 +38,8 @@ internal data class SampleWebViewUiState(
 /**
  * Compose 示例的平台无关操作协调器。
  *
- * 原生控制器的异步回调仍由各平台实现维护；本类在每次用户命令后刷新一次快照，不承诺替代
- * 平台的完整状态订阅机制。
+ * 原生控制器的异步回调由 [WebViewStateObservable] 发布，并由 Compose 界面传给
+ * [updateWebViewState]；每次用户命令后仍会读取一次快照，以兼容未实现该可选能力的第三方控制器。
  */
 internal class SampleWebViewPresenter(
   private val controller: WebViewController,
@@ -76,19 +76,9 @@ internal class SampleWebViewPresenter(
   /** 请求原生控制器清理其支持范围内的会话数据。 */
   fun clearSession() = runControllerAction(controller::clearSession)
 
-  /**
-   * 同步原生控制器的异步状态变化。
-   *
-   * 页面加载回调可能在用户操作完成后才到达，因此示例界面需要定期调用本方法刷新标题、错误与历史状态。
-   * 返回值表示状态是否变化，调用方可据此避免无意义的 Compose 重组。
-   */
-  fun refreshState(): Boolean {
-    val refreshedState = uiState.copy(webViewState = controller.state)
-    if (refreshedState == uiState) {
-      return false
-    }
-    uiState = refreshedState
-    return true
+  /** 接收控制器发布的异步状态快照，不会改变地址栏输入或操作错误提示。 */
+  fun updateWebViewState(state: WebViewState) {
+    uiState = uiState.copy(webViewState = state)
   }
 
   private fun runControllerAction(action: () -> Unit) {

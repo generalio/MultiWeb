@@ -3,19 +3,34 @@ package io.github.multiweb.desktop
 import io.github.multiweb.api.NavigationDecision
 import io.github.multiweb.api.NavigationPolicy
 import io.github.multiweb.api.NavigationRequest
+import io.github.multiweb.api.JavaScriptExecutor
 import io.github.multiweb.api.WebError
 import io.github.multiweb.api.WebErrorCategory
 import io.github.multiweb.api.WebRequest
 import io.github.multiweb.api.WebViewConfig
 import io.github.multiweb.api.WebViewController
 import io.github.multiweb.api.WebViewState
+import io.github.multiweb.api.WebViewStateObservable
 import io.github.multiweb.extension.DownloadRequest
 import io.github.multiweb.extension.PageErrorEvent
 import io.github.multiweb.extension.PageFinishedEvent
 import io.github.multiweb.extension.PageStartedEvent
 import io.github.multiweb.extension.WebContextAction
+import io.github.multiweb.extension.WebFileChooserHandler
+import io.github.multiweb.extension.WebFileChooserMode
+import io.github.multiweb.extension.WebFileChooserRequest
+import io.github.multiweb.extension.WebFileChooserResult
 import io.github.multiweb.extension.WebViewExtension
+import io.github.multiweb.extension.WebViewControllerLifecycleExtension
 import io.github.multiweb.extension.WebViewInitialization
+import java.net.URI
+import java.nio.file.Files
+import java.nio.file.Path
+import java.nio.file.Paths
+import java.util.Vector
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
 import java.awt.Component
 import java.util.concurrent.ConcurrentHashMap
 import javax.swing.SwingUtilities
@@ -25,6 +40,8 @@ import org.cef.browser.CefBrowser
 import org.cef.browser.CefFrame
 import org.cef.callback.CefCompletionCallback
 import org.cef.callback.CefContextMenuParams
+import org.cef.callback.CefFileDialogCallback
+import org.cef.handler.CefDialogHandler
 import org.cef.handler.CefContextMenuHandlerAdapter
 import org.cef.handler.CefDisplayHandlerAdapter
 import org.cef.handler.CefDownloadHandlerAdapter
@@ -60,7 +77,7 @@ class DesktopWebViewController(
   private val onBrowserClosed: () -> Unit = {},
   /** 可选的平台能力扩展；事件按列表顺序派发。 */
   private val extensions: List<WebViewExtension> = emptyList(),
-) : WebViewController {
+) : WebViewController, WebViewStateObservable, JavaScriptExecutor {
   /**
    * 使用跨平台初始化对象创建桌面控制器。
    *
@@ -81,10 +98,14 @@ class DesktopWebViewController(
   )
 
   private val navigationDecider = DesktopNavigationDecider(config, navigationPolicy)
+  /** 文件选择扩展至多一个；缺失时网页请求必须显式取消。 */
+  private val fileChooserHandler = extensions.filterIsInstance<WebFileChooserHandler>().singleOrNull()
   /** 已在 [load] 中通过策略校验的主框架地址，供首次 JCEF 回调直接放行。 */
   private val pendingProgrammaticMainFrameUrls = ConcurrentHashMap.newKeySet<String>()
   /** 待写入下一次主框架请求的自定义请求头；不能通过 [CefBrowser.loadRequest] 设置，避免 Chromium 拒绝无效发起方。 */
   private val pendingProgrammaticMainFrameHeaders = ConcurrentHashMap<String, Map<String, String>>()
+  /** 尚未由宿主完成的 JCEF 文件选择请求；控制器销毁时必须主动取消。 */
+  private val activeFileChoosers = ConcurrentHashMap.newKeySet<DesktopFileChooserCallbackGuard>()
   /** JCEF 原生浏览器创建前收到的最新请求；创建完成后必须回放，避免用户首击丢失加载操作。 */
   private var pendingInitialRequest: WebRequest? = null
   private val client: CefClient
@@ -108,10 +129,16 @@ class DesktopWebViewController(
   @Volatile
   private var isClientDisposed: Boolean = false
 
-  /** JCEF 回调可能来自非 EDT 线程，因此状态使用易变字段保证跨线程可见。 */
-  @Volatile
-  override var state: WebViewState = WebViewState()
-    private set
+  /** JCEF 回调可能来自非 EDT 线程，使用 StateFlow 安全发布状态快照给宿主。 */
+  private val mutableState = MutableStateFlow(WebViewState())
+
+  override var state: WebViewState
+    get() = mutableState.value
+    private set(value) {
+      mutableState.value = value
+    }
+
+  override val stateFlow: StateFlow<WebViewState> = mutableState.asStateFlow()
 
   init {
     checkEdt()
@@ -124,6 +151,9 @@ class DesktopWebViewController(
     require(config.persistentSessionEnabled) {
       "JCEF 会话持久化由进程级 CefApp 配置管理，桌面控制器不支持隔离临时会话。"
     }
+    require(extensions.count { extension -> extension is WebFileChooserHandler } <= 1) {
+      "WebViewInitialization.extensions 最多只能配置一个 WebFileChooserHandler。"
+    }
 
     client = cefApp.createClient().also(::configureClient)
     scriptBridgeInstallation = DesktopScriptBridgeInstallation.install(
@@ -135,6 +165,9 @@ class DesktopWebViewController(
     view = browser.uiComponent
     // Compose 的 SwingPanel 不保证触发 JCEF 所需的首次 Swing 绘制；主动创建可避免原生视图保持空白。
     browser.createImmediately()
+    extensions.filterIsInstance<WebViewControllerLifecycleExtension>().forEach { extension ->
+      extension.onControllerAttached(this)
+    }
   }
 
   override fun load(request: WebRequest) {
@@ -187,6 +220,23 @@ class DesktopWebViewController(
     )
   }
 
+  /**
+   * 向当前受信任主文档提交脚本。
+   *
+   * JCEF 只能在 EDT 且浏览器创建完成后安全执行脚本；来源不可信、控制器已释放或页面尚未就绪时直接拒绝。
+   */
+  override fun executeJavaScript(script: String, allowedHosts: Set<String>): Boolean {
+    if (!SwingUtilities.isEventDispatchThread() || isDisposed || !isBrowserReady) {
+      return false
+    }
+    val mainFrame = browser.mainFrame ?: return false
+    if (!isTrustedJavaScriptUrl(mainFrame.url, allowedHosts)) {
+      return false
+    }
+    mainFrame.executeJavaScript(script, "multiweb://executor", 0)
+    return true
+  }
+
   override fun dispose() {
     checkEdt()
     if (isDisposed) {
@@ -194,9 +244,14 @@ class DesktopWebViewController(
     }
 
     isDisposed = true
+    extensions.filterIsInstance<WebViewControllerLifecycleExtension>().forEach { extension ->
+      extension.onControllerDisposed()
+    }
     pendingInitialRequest = null
     pendingProgrammaticMainFrameUrls.clear()
     pendingProgrammaticMainFrameHeaders.clear()
+    activeFileChoosers.forEach(DesktopFileChooserCallbackGuard::cancel)
+    activeFileChoosers.clear()
     scriptBridgeInstallation.dispose()
     browser.stopLoad()
     browser.close(true)
@@ -207,6 +262,7 @@ class DesktopWebViewController(
     client.addRequestHandler(createRequestHandler())
     client.addLoadHandler(createLoadHandler())
     client.addDisplayHandler(createDisplayHandler())
+    client.addDialogHandler(createDialogHandler())
     if (extensions.isNotEmpty()) {
       client.addDownloadHandler(createDownloadHandler())
       client.addContextMenuHandler(createContextMenuHandler())
@@ -486,6 +542,102 @@ class DesktopWebViewController(
       override fun onTitleChange(browser: CefBrowser, title: String) {
         state = state.copy(title = title)
       }
+    }
+  }
+
+  /**
+   * 接管 JCEF 文件对话框并交给宿主，避免 Chromium 默认对话框绕过公共权限边界。
+   *
+   * JCEF 允许异步调用 [CefFileDialogCallback]，因此宿主可以在自己的 UI 线程显示选择器；回调以一次性语义
+   * 保护，重复或无效结果都会被取消。
+   */
+  private fun createDialogHandler(): CefDialogHandler {
+    return object : CefDialogHandler {
+      override fun onFileDialog(
+        browser: CefBrowser,
+        mode: CefDialogHandler.FileDialogMode,
+        title: String,
+        defaultFilePath: String,
+        acceptFilters: Vector<String>,
+        acceptExtensions: Vector<String>,
+        acceptDescriptions: Vector<String>,
+        callback: CefFileDialogCallback,
+      ): Boolean {
+        val request = WebFileChooserRequest(
+          acceptTypes = acceptFilters.filter(String::isNotBlank),
+          mode = if (mode == CefDialogHandler.FileDialogMode.FILE_DIALOG_SAVE) {
+            WebFileChooserMode.Save
+          } else {
+            WebFileChooserMode.Open
+          },
+          allowMultipleSelection = mode == CefDialogHandler.FileDialogMode.FILE_DIALOG_OPEN_MULTIPLE,
+          allowDirectories = mode == CefDialogHandler.FileDialogMode.FILE_DIALOG_OPEN_FOLDER,
+        )
+        val handler = fileChooserHandler
+        if (handler == null) {
+          callback.Cancel()
+          return true
+        }
+
+        val callbackGuard = DesktopFileChooserCallbackGuard(
+          onCancelled = callback::Cancel,
+          onSelected = { selectedPaths -> callback.Continue(Vector(selectedPaths)) },
+        )
+        activeFileChoosers += callbackGuard
+        fun complete(result: WebFileChooserResult) {
+          // 在移出活动集合前完成回调，让销毁过程可与宿主迟到的异步结果安全竞争。
+          callbackGuard.complete(
+            selectedPaths = if (isDisposed) null else result.toDesktopPaths(request),
+          )
+          activeFileChoosers -= callbackGuard
+        }
+
+        try {
+          handler.onFileChooserRequested(request, ::complete)
+        } catch (_: Exception) {
+          // 宿主处理异常不能让 Chromium 回退到默认文件对话框，按取消处理。
+          complete(WebFileChooserResult.Cancelled)
+        }
+        return true
+      }
+    }
+  }
+
+  /** Desktop 只将宿主显式返回的绝对 `file://` URI 转为 JCEF 需要的本地路径。 */
+  private fun WebFileChooserResult.toDesktopPaths(request: WebFileChooserRequest): List<String>? {
+    val selected = this as? WebFileChooserResult.Selected ?: return null
+    if (!request.allowMultipleSelection && selected.uris.size > 1) {
+      return null
+    }
+    val paths = selected.uris.map { uri -> uri.toDesktopPath() }
+    if (paths.any { path -> path == null }) {
+      return null
+    }
+    val resolvedPaths = paths.filterNotNull()
+    if (resolvedPaths.any { path -> !path.matchesRequest(request) }) {
+      return null
+    }
+    return resolvedPaths.map(Path::toString)
+  }
+
+  /** 拒绝远程 URI、相对路径和包含查询参数的地址，避免网页取得非宿主选择的资源。 */
+  private fun String.toDesktopPath(): Path? {
+    return runCatching {
+      val uri = URI(this)
+      require(uri.scheme == "file" && uri.query == null && uri.fragment == null)
+      Paths.get(uri).takeIf { path -> path.isAbsolute }
+    }.getOrNull()
+  }
+
+  /** 打开模式必须匹配已存在文件或目录；保存模式只接受存在目录下的目标。 */
+  private fun Path.matchesRequest(request: WebFileChooserRequest): Boolean {
+    return when (request.mode) {
+      WebFileChooserMode.Open -> if (request.allowDirectories) {
+        Files.isDirectory(this)
+      } else {
+        Files.isRegularFile(this)
+      }
+      WebFileChooserMode.Save -> parent?.let(Files::isDirectory) == true
     }
   }
 

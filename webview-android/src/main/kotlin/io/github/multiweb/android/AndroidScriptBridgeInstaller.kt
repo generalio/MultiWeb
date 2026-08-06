@@ -198,11 +198,25 @@ internal data class AndroidScriptBridgeConfiguration(
   }
 }
 
+/**
+ * 复核脚本操作的当前主文档来源。
+ *
+ * 规则与 AndroidX 的桥注入规则一致：仅允许 HTTPS、精确主机及默认端口 443。该函数同时供消息桥和
+ * [io.github.multiweb.api.JavaScriptExecutor] 使用，避免两条执行路径的安全边界不一致。
+ */
+internal fun isTrustedJavaScriptUrl(url: String?, allowedHosts: Set<String>): Boolean {
+  if (url == null || allowedHosts.isEmpty()) {
+    return false
+  }
+  val origin = runCatching { URI(url) }.getOrNull() ?: return false
+  return origin.scheme.equals("https", ignoreCase = true) &&
+    origin.host?.lowercase() in allowedHosts.mapTo(hashSetOf()) { it.lowercase() } &&
+    origin.port in setOf(-1, 443)
+}
+
 /** 复核来源与 AndroidX 注入规则一致：仅 HTTPS、精确主机及默认端口 443。 */
 private fun AndroidScriptBridgeConfiguration.isAllowedOrigin(origin: Uri): Boolean {
-  return origin.scheme.equals("https", ignoreCase = true) &&
-    origin.host?.lowercase() in allowedHosts &&
-    origin.port in setOf(-1, 443)
+  return isTrustedJavaScriptUrl(origin.toString(), allowedHosts)
 }
 
 /** 将受限来源的网页消息转换为 [ScriptBridge] 调用。 */

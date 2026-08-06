@@ -68,7 +68,8 @@ internal class SampleWebViewExtension(
 /**
  * 创建旧 `AndroidWebView` 方法名兼容桥的示例宿主。
  *
- * 示例仅处理全屏与图片保存，其他业务请求明确返回不支持。真实应用应直接实现
+ * 示例仅处理全屏与图片保存，其他业务请求明确返回不支持。示例显式开启旧脚本执行能力，因此网页的 `onLoad` 与
+ * `exeJs` 会由各原生控制器在受信任来源中执行，不会流入业务宿主。真实应用应直接实现
  * [NativeWebViewBridgeHost]，将账号、路由、提示或传感器能力接入自身的业务层。
  */
 internal fun sampleNativeWebViewBridgeExtension(
@@ -93,6 +94,7 @@ internal fun sampleNativeWebViewBridgeExtension(
         else -> NativeWebViewBridgeResult.Failure("unsupported_sample_operation")
       }
     },
+    enableLegacyJavaScriptExecution = true,
   )
 }
 

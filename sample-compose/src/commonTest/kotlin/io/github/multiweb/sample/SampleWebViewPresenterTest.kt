@@ -76,14 +76,13 @@ class SampleWebViewPresenterTest {
   }
 
   @Test
-  fun `刷新状态会同步原生控制器的异步回调结果`() {
+  fun `接收状态快照会同步原生控制器的异步回调结果`() {
     val controller = FakeWebViewController()
     val presenter = SampleWebViewPresenter(controller)
 
     controller.load(WebRequest("https://kotlinlang.org"))
+    presenter.updateWebViewState(controller.stateFlow.value)
 
-    assertTrue(presenter.refreshState())
     assertEquals("https://kotlinlang.org", presenter.uiState.webViewState.url)
-    assertFalse(presenter.refreshState())
   }
 }

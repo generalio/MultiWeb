@@ -1,12 +1,16 @@
 package io.github.multiweb.api
 
+import kotlinx.coroutines.flow.StateFlow
+
 /**
  * 跨平台浏览器控制契约。
  *
  * 原生视图的创建与生命周期由各平台实现模块负责，调用方只通过此接口执行浏览器操作。
+ * 需要响应异步状态变化时，可将控制器转换为 [WebViewStateObservable]；该可选能力不会破坏既有
+ * [WebViewController] 实现的二进制兼容性。
  */
 interface WebViewController {
-  /** 当前浏览器的可观察状态。 */
+  /** 当前浏览器状态快照。 */
   val state: WebViewState
 
   /** 按请求加载页面。 */
@@ -29,6 +33,32 @@ interface WebViewController {
 
   /** 释放原生视图及其关联资源；调用后不得继续使用此控制器。 */
   fun dispose()
+}
+
+/**
+ * 可选的浏览器状态订阅能力。
+ *
+ * [WebViewController] 不直接继承此接口，第三方既有实现可以继续仅提供状态快照。MultiWeb 内置的
+ * 控制器和测试替身均实现该接口；调用方可通过安全转换订阅 [stateFlow]，并在其协程作用域结束时取消收集。
+ */
+interface WebViewStateObservable {
+  /** 始终保存最新 [WebViewState] 的热流；页面加载、标题、进度、历史记录与错误变化时会更新。 */
+  val stateFlow: StateFlow<WebViewState>
+}
+
+/**
+ * 受控向当前主文档提交 JavaScript 的可选能力。
+ *
+ * 该接口只供宿主或受限扩展调用，不能据此把任意原生对象暴露给网页。[allowedHosts] 必须是当前调用方已配置的
+ * 精确可信 HTTPS 主机集合；平台会在提交前再次校验当前主文档来源。返回 `true` 仅表示脚本已提交给平台，
+ * 不承诺网页执行结果；当前平台不支持、控制器已释放或来源不可信时返回 `false`。
+ */
+interface JavaScriptExecutor {
+  /** 向可信当前主文档提交脚本；[allowedHosts] 不能为空且不支持通配符。 */
+  fun executeJavaScript(
+    script: String,
+    allowedHosts: Set<String>,
+  ): Boolean
 }
 
 /** 一次页面加载请求。 */
