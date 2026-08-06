@@ -95,6 +95,10 @@ class AndroidWebViewController(
   private val navigationDecider = AndroidNavigationDecider(config, navigationPolicy)
   /** 文件选择扩展至多一个；缺失时网页请求必须显式取消。 */
   private val fileChooserHandler = extensions.filterIsInstance<WebFileChooserHandler>().singleOrNull()
+  /** 旧网页显示兼容配置；缺失时不写入视口与缩放设置，保持历史安全默认值。 */
+  private val compatibilitySettings = extensions
+    .singleAndroidWebViewCompatibilityExtension()
+    ?.toAndroidWebViewCompatibilitySettings()
 
   /**
    * 供宿主添加到界面层级的原生 WebView。
@@ -281,6 +285,15 @@ class AndroidWebViewController(
       setSupportMultipleWindows(false)
       setGeolocationEnabled(false)
       mediaPlaybackRequiresUserGesture = !settings.mediaPlaybackWithoutUserGestureAllowed
+      compatibilitySettings?.let { compatibility ->
+        mixedContentMode = compatibility.mixedContentMode
+        mediaPlaybackRequiresUserGesture = compatibility.mediaPlaybackRequiresUserGesture
+        useWideViewPort = compatibility.useWideViewPort
+        loadWithOverviewMode = compatibility.loadWithOverviewMode
+        setSupportZoom(compatibility.supportZoom)
+        builtInZoomControls = compatibility.builtInZoomControls
+        displayZoomControls = compatibility.displayZoomControls
+      }
       if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
         safeBrowsingEnabled = true
       }

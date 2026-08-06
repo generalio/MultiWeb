@@ -6,6 +6,7 @@ import io.github.multiweb.api.WebViewController
 import io.github.multiweb.api.WebViewState
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFailsWith
 import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 
@@ -155,6 +156,18 @@ class NativeWebViewBridgeExtensionTest {
       executor.originPolicyCalls,
     )
     assertEquals(listOf("window.init()", "window.refresh()"), executor.scripts)
+  }
+
+  @Test
+  fun `策略构造器仅接受显式不安全兼容模式`() {
+    val exception = assertFailsWith<IllegalArgumentException> {
+      NativeWebViewBridgeExtension(
+        originPolicy = ScriptBridgeOriginPolicy.ExactHttpsHosts(setOf("app.example.com")),
+        host = NativeWebViewBridgeHost { NativeWebViewBridgeResult.Success() },
+      )
+    }
+
+    assertTrue(exception.message.orEmpty().contains("allowedHosts"))
   }
 
   @Test

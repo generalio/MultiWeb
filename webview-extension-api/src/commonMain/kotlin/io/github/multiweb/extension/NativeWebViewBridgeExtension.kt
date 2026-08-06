@@ -160,7 +160,12 @@ class NativeWebViewBridgeExtension private constructor(
     host: NativeWebViewBridgeHost,
     enableLegacyJavaScriptExecution: Boolean = false,
     bridgeName: String = "AndroidWebView",
-  ) : this(originPolicy, host, bridgeName, enableLegacyJavaScriptExecution)
+  ) : this(
+    requireUnsafeAnyHttpOrHttps(originPolicy),
+    host,
+    bridgeName,
+    enableLegacyJavaScriptExecution,
+  )
 
   /** 生命周期绑定的脚本执行器；控制器释放后必须清空。 */
   private var javaScriptExecutor: JavaScriptExecutor? = null
@@ -281,6 +286,14 @@ class NativeWebViewBridgeExtension private constructor(
   }
 
   private companion object {
+    /** 避免通用策略构造器被误用为精确主机配置；后者必须使用保留的 [allowedHosts] 构造器。 */
+    fun requireUnsafeAnyHttpOrHttps(originPolicy: ScriptBridgeOriginPolicy): ScriptBridgeOriginPolicy {
+      require(originPolicy is ScriptBridgeOriginPolicy.UnsafeAnyHttpOrHttps) {
+        "精确 HTTPS 主机请使用 allowedHosts 构造器；此构造器仅支持 UnsafeAnyHttpOrHttps。"
+      }
+      return originPolicy
+    }
+
     /** 控制器未实现脚本执行器或已释放时返回的稳定错误码。 */
     val JavaScriptExecutorUnavailable = "javascript_executor_unavailable"
     /** 原生侧因来源、线程或平台状态拒绝脚本时返回的稳定错误码。 */
