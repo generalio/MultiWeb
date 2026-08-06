@@ -52,26 +52,51 @@ class AndroidScriptBridgeConfigurationTest {
   }
 
   @Test
-  fun `Android 明确拒绝任意 HTTP HTTPS 的不安全来源策略`() {
-    val exception = assertFailsWith<IllegalArgumentException> {
-      AndroidScriptBridgeConfiguration.create(
-        listOf(
-          object : OriginPolicyAwareScriptBridge {
-            override val name = "AndroidWebView"
-            override val allowedHosts = emptySet<String>()
-            override val originPolicy = ScriptBridgeOriginPolicy.UnsafeAnyHttpOrHttps
+  fun `不安全来源策略使用全来源内部通道并只接受 HTTP HTTPS 主文档`() {
+    val configuration = AndroidScriptBridgeConfiguration.create(listOf(unsafeBridge())).single()
 
-            override fun handle(call: ScriptBridgeCall): ScriptBridgeResponse? = null
-          },
-        ),
-      )
-    }
-
-    assertContains(exception.message.orEmpty(), "UnsafeAnyHttpOrHttps")
+    assertEquals<ScriptBridgeOriginPolicy>(
+      ScriptBridgeOriginPolicy.UnsafeAnyHttpOrHttps,
+      configuration.originPolicy,
+    )
+    assertEquals(emptySet<String>(), configuration.allowedHosts)
+    assertEquals(setOf("*"), configuration.allowedOriginRules)
+    val facadeScript = requireNotNull(configuration.facadeInjectionScript())
+    assertContains(facadeScript, "window.top === window")
+    assertContains(facadeScript, "window.location.protocol === 'http:'")
+    assertContains(facadeScript, "window.location.protocol === 'https:'")
+    assertEquals(
+      true,
+      isTrustedJavaScriptUrl(
+        "https://legacy.example/page",
+        ScriptBridgeOriginPolicy.UnsafeAnyHttpOrHttps,
+      ),
+    )
+    assertEquals(
+      true,
+      isTrustedJavaScriptUrl(
+        "http://legacy.example/page",
+        ScriptBridgeOriginPolicy.UnsafeAnyHttpOrHttps,
+      ),
+    )
     assertEquals(
       false,
       isTrustedJavaScriptUrl(
-        "https://legacy.example/page",
+        "file:///android_asset/index.html",
+        ScriptBridgeOriginPolicy.UnsafeAnyHttpOrHttps,
+      ),
+    )
+    assertEquals(
+      false,
+      isTrustedJavaScriptUrl(
+        "data:text/html,legacy",
+        ScriptBridgeOriginPolicy.UnsafeAnyHttpOrHttps,
+      ),
+    )
+    assertEquals(
+      false,
+      isTrustedJavaScriptUrl(
+        "qq://legacy.example/page",
         ScriptBridgeOriginPolicy.UnsafeAnyHttpOrHttps,
       ),
     )
@@ -160,6 +185,18 @@ class AndroidScriptBridgeConfigurationTest {
     return object : ScriptBridge {
       override val name = name
       override val allowedHosts = hosts
+
+      override fun handle(call: ScriptBridgeCall): ScriptBridgeResponse? = null
+    }
+  }
+
+  private fun unsafeBridge(): ScriptBridge {
+    return object : ScriptBridgeWithFacade, OriginPolicyAwareScriptBridge {
+      override val name = "AndroidWebView"
+      override val transportName = "__multiweb_android_transport"
+      override val allowedHosts = emptySet<String>()
+      override val originPolicy = ScriptBridgeOriginPolicy.UnsafeAnyHttpOrHttps
+      override val facade = ScriptBridgeFacade(setOf("ping"))
 
       override fun handle(call: ScriptBridgeCall): ScriptBridgeResponse? = null
     }

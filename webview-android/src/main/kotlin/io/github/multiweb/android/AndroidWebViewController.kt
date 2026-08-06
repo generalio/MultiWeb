@@ -57,7 +57,7 @@ import kotlinx.coroutines.flow.asStateFlow
  * 为 `false` 的隔离临时会话，因此会在构造时拒绝该配置，避免产生不符合契约的安全假设。
  *
  * [extensions] 由控制器与内部 Client 组合执行，业务方不能通过它替换导航或安全处理。JS 桥仅通过
- * AndroidX WebKit 的受限来源消息通道暴露给 [io.github.multiweb.extension.ScriptBridge.allowedHosts]。
+ * AndroidX WebKit 的受限来源消息通道按其来源策略暴露，禁止使用 `addJavascriptInterface`。
  */
 class AndroidWebViewController(
   context: Context,
@@ -123,6 +123,13 @@ class AndroidWebViewController(
 
   /** 当前尚未完成的原生文件选择回调；同一时间只能保留一个。 */
   private var activeFileChooserCallback: ValueCallback<Array<Uri>>? = null
+  /**
+   * 当前主框架正在加载或已完成加载的 URL。
+   *
+   * 文档开始阶段的旧桥可能早于 [WebView.url] 更新调用 `exeJs`，因此不能只依赖后者复核来源。该值只由主框架
+   * 生命周期回调更新，并在释放时清空，避免向上一个页面或未知页面提交脚本。
+   */
+  private var currentMainFrameUrl: String? = null
 
   init {
     checkMainThread()
@@ -207,30 +214,28 @@ class AndroidWebViewController(
    * 不在主线程、控制器已释放或当前页面不符合 [allowedHosts] 时不执行，避免异步扩展绕过桥的来源边界。
    */
   override fun executeJavaScript(script: String, allowedHosts: Set<String>): Boolean {
-    if (Looper.myLooper() != Looper.getMainLooper() || isDisposed) {
-      return false
-    }
-    if (!isTrustedJavaScriptUrl(view.url, allowedHosts)) {
-      return false
-    }
-    view.evaluateJavascript(script, null)
-    return true
+    return executeJavaScript(script, ScriptBridgeOriginPolicy.ExactHttpsHosts(allowedHosts))
   }
 
   /**
    * 按桥来源策略向当前主文档提交脚本。
    *
-   * Android 不支持 [ScriptBridgeOriginPolicy.UnsafeAnyHttpOrHttps]，原因是 AndroidX WebKit 无法在不使用全局 `*`
-   * 的情况下匹配任意 HTTP/HTTPS 主机；全局规则会使桥对象进入 `file:`、`data:` 与子框架，故必须拒绝。
+   * 精确策略仅接受 HTTPS 默认端口与配置主机；不安全兼容策略仅接受带主机名的 HTTP/HTTPS 主文档。虽然 AndroidX
+   * WebKit 需要以 `*` 安装不安全模式的内部通道，脚本执行仍只针对当前主文档，且在提交前调用同一来源校验。
    */
   override fun executeJavaScript(
     script: String,
     originPolicy: ScriptBridgeOriginPolicy,
   ): Boolean {
-    if (originPolicy !is ScriptBridgeOriginPolicy.ExactHttpsHosts) {
+    if (Looper.myLooper() != Looper.getMainLooper() || isDisposed) {
       return false
     }
-    return executeJavaScript(script, originPolicy.hosts)
+    val currentUrl = currentMainFrameUrl ?: view.url
+    if (!isTrustedJavaScriptUrl(currentUrl, originPolicy)) {
+      return false
+    }
+    view.evaluateJavascript(script, null)
+    return true
   }
 
   /** 通知 WebView 宿主进入暂停状态。 */
@@ -253,6 +258,7 @@ class AndroidWebViewController(
 
     // 先切换状态，保证扩展释放过程中不能再向即将销毁的 WebView 提交脚本。
     isDisposed = true
+    currentMainFrameUrl = null
     extensions.filterIsInstance<WebViewControllerLifecycleExtension>().forEach { extension ->
       extension.onControllerDisposed()
     }
@@ -360,6 +366,7 @@ class AndroidWebViewController(
       }
 
       override fun onPageStarted(view: WebView, url: String?, favicon: android.graphics.Bitmap?) {
+        currentMainFrameUrl = url
         state = state.copy(
           url = url ?: state.url,
           isLoading = true,
@@ -372,6 +379,7 @@ class AndroidWebViewController(
       }
 
       override fun onPageFinished(view: WebView, url: String?) {
+        currentMainFrameUrl = url
         state = state.copy(
           url = url ?: state.url,
           loadingProgress = 1f,
