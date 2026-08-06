@@ -3,8 +3,10 @@ package io.github.multiweb.desktop
 import io.github.multiweb.extension.ScriptBridge
 import io.github.multiweb.extension.ScriptBridgeCall
 import io.github.multiweb.extension.ScriptBridgeFacade
+import io.github.multiweb.extension.ScriptBridgeOriginPolicy
 import io.github.multiweb.extension.ScriptBridgeResponse
 import io.github.multiweb.extension.ScriptBridgeWithFacade
+import io.github.multiweb.extension.resolvedOriginPolicy
 import java.net.URI
 import java.net.URLDecoder
 import java.nio.charset.StandardCharsets
@@ -18,7 +20,7 @@ import org.cef.handler.CefMessageRouterHandlerAdapter
 /**
  * JCEF 单个桥的安全配置。
  *
- * CEF 会把查询函数注入所有页面，因此配置中的主机校验既在脚本注入前执行，也在原生回调中再次执行。
+ * CEF 会把查询函数注入所有页面，因此配置中的来源校验既在脚本注入前执行，也在原生回调中再次执行。
  */
 internal data class DesktopScriptBridgeConfiguration(
   /** 业务桥定义。 */
@@ -27,6 +29,8 @@ internal data class DesktopScriptBridgeConfiguration(
   val transportName: String,
   /** 网页公开的受限方法门面；未声明时只暴露消息通道。 */
   val facade: ScriptBridgeFacade?,
+  /** 桥注入、消息回调和受控脚本执行共用的来源策略。 */
+  val originPolicy: ScriptBridgeOriginPolicy,
   /** 当前桥在页面中使用的查询函数名。 */
   val queryFunction: String,
   /** 规范化后的精确 HTTPS 主机名，仅匹配默认 HTTPS 端口 443。 */
@@ -34,7 +38,7 @@ internal data class DesktopScriptBridgeConfiguration(
 ) {
   /** 判断 JCEF 回调所在的主框架是否属于受信任来源。 */
   fun isAllowedUrl(url: String): Boolean {
-    return isTrustedJavaScriptUrl(url, allowedHosts)
+    return isTrustedJavaScriptUrl(url, originPolicy)
   }
 
   /**
@@ -44,14 +48,23 @@ internal data class DesktopScriptBridgeConfiguration(
    * 共用同一段网页脚本。
    */
   fun injectionScript(): String {
-    val hostExpression = allowedHosts.joinToString(" || ") { host ->
-      "window.location.hostname === ${host.toJavaScriptString()}"
+    val originCheck = when (val policy = originPolicy) {
+      is ScriptBridgeOriginPolicy.ExactHttpsHosts -> {
+        val hostExpression = allowedHosts.joinToString(" || ") { host ->
+          "window.location.hostname === ${host.toJavaScriptString()}"
+        }
+        "window.location.protocol === 'https:' && " +
+          "(window.location.port === '' || window.location.port === '443') && ($hostExpression)"
+      }
+      ScriptBridgeOriginPolicy.UnsafeAnyHttpOrHttps -> {
+        "window.top === window && (window.location.protocol === 'http:' || window.location.protocol === 'https:')"
+      }
     }
     val transportName = transportName.toJavaScriptString()
     val queryFunction = queryFunction.toJavaScriptString()
     val transportScript = """
       (function() {
-        if (window.location.protocol !== 'https:' || (window.location.port !== '' && window.location.port !== '443') || !($hostExpression)) return;
+        if (!($originCheck)) return;
         var query = window[$queryFunction];
         if (typeof query !== 'function') return;
         try {
@@ -161,19 +174,29 @@ internal data class DesktopScriptBridgeConfiguration(
             }
           }
         }
-        require(bridge.allowedHosts.isNotEmpty()) {
-          "JS 桥必须声明至少一个受信任主机：${bridge.name}"
-        }
-        val allowedHosts = bridge.allowedHosts.mapTo(linkedSetOf()) { host ->
-          require(isValidHost(host)) {
-            "JS 桥只允许精确 ASCII 主机名且不支持通配符：$host"
+        val originPolicy = bridge.resolvedOriginPolicy()
+        val allowedHosts = when (originPolicy) {
+          is ScriptBridgeOriginPolicy.ExactHttpsHosts -> {
+            require(originPolicy.hosts.isNotEmpty()) {
+              "JS 桥必须声明至少一个受信任主机：${bridge.name}"
+            }
+            originPolicy.hosts.mapTo(linkedSetOf()) { host ->
+              require(isValidHost(host)) {
+                "JS 桥只允许精确 ASCII 主机名且不支持通配符：$host"
+              }
+              host.lowercase()
+            }
           }
-          host.lowercase()
+          ScriptBridgeOriginPolicy.UnsafeAnyHttpOrHttps -> emptySet()
         }
         DesktopScriptBridgeConfiguration(
           bridge = bridge,
           transportName = transportName,
           facade = facade,
+          originPolicy = when (originPolicy) {
+            is ScriptBridgeOriginPolicy.ExactHttpsHosts -> ScriptBridgeOriginPolicy.ExactHttpsHosts(allowedHosts)
+            ScriptBridgeOriginPolicy.UnsafeAnyHttpOrHttps -> ScriptBridgeOriginPolicy.UnsafeAnyHttpOrHttps
+          },
           queryFunction = "__multiweb_query_$transportName",
           allowedHosts = allowedHosts,
         )
@@ -197,17 +220,34 @@ internal data class DesktopScriptBridgeConfiguration(
 /**
  * 复核脚本操作的当前主文档来源。
  *
- * 规则与 JCEF 桥注入和消息处理保持一致：仅允许 HTTPS、精确主机及默认端口 443。该函数同时供消息桥和
- * [io.github.multiweb.api.JavaScriptExecutor] 使用，避免两条执行路径的安全边界不一致。
+ * 规则与 JCEF 桥注入和消息处理保持一致。精确策略仅允许 HTTPS 默认端口 443；不安全兼容策略仅允许具有主机名的
+ * HTTP/HTTPS 页面。该函数同时供消息桥和 [io.github.multiweb.api.JavaScriptExecutor] 使用，避免两条执行路径的
+ * 安全边界不一致。
  */
 internal fun isTrustedJavaScriptUrl(url: String?, allowedHosts: Set<String>): Boolean {
-  if (url == null || allowedHosts.isEmpty()) {
+  return isTrustedJavaScriptUrl(url, ScriptBridgeOriginPolicy.ExactHttpsHosts(allowedHosts))
+}
+
+/** 按策略复核 JCEF 当前主文档 URL；不安全模式仍拒绝本地与自定义 Scheme。 */
+internal fun isTrustedJavaScriptUrl(
+  url: String?,
+  originPolicy: ScriptBridgeOriginPolicy,
+): Boolean {
+  if (url == null) {
     return false
   }
   val parsed = runCatching { URI(url) }.getOrNull() ?: return false
-  return parsed.scheme.equals("https", ignoreCase = true) &&
-    parsed.host?.lowercase() in allowedHosts.mapTo(hashSetOf()) { it.lowercase() } &&
-    parsed.port in setOf(-1, 443)
+  return when (originPolicy) {
+    is ScriptBridgeOriginPolicy.ExactHttpsHosts -> {
+      parsed.scheme.equals("https", ignoreCase = true) &&
+        parsed.host?.lowercase() in originPolicy.hosts.mapTo(hashSetOf()) { it.lowercase() } &&
+        parsed.port in setOf(-1, 443)
+    }
+    ScriptBridgeOriginPolicy.UnsafeAnyHttpOrHttps -> {
+      !parsed.host.isNullOrBlank() &&
+        (parsed.scheme.equals("http", ignoreCase = true) || parsed.scheme.equals("https", ignoreCase = true))
+    }
+  }
 }
 
 /** 管理 Desktop 桥的 JCEF 路由、处理器和注入生命周期。 */

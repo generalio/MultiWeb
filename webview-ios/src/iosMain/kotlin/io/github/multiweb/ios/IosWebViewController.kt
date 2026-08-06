@@ -15,8 +15,10 @@ import io.github.multiweb.api.WebViewController
 import io.github.multiweb.api.WebViewState
 import io.github.multiweb.api.WebViewStateObservable
 import io.github.multiweb.extension.PageErrorEvent
+import io.github.multiweb.extension.OriginPolicyAwareJavaScriptExecutor
 import io.github.multiweb.extension.PageFinishedEvent
 import io.github.multiweb.extension.PageStartedEvent
+import io.github.multiweb.extension.ScriptBridgeOriginPolicy
 import io.github.multiweb.extension.WebFileChooserHandler
 import io.github.multiweb.extension.WebFileChooserRequest
 import io.github.multiweb.extension.WebFileChooserResult
@@ -78,7 +80,7 @@ class IosWebViewController(
   private val onExternalNavigation: (NavigationRequest) -> Unit = {},
   /** 可选的平台能力扩展；事件按列表顺序派发。 */
   private val extensions: List<WebViewExtension> = emptyList(),
-) : WebViewController, WebViewStateObservable, JavaScriptExecutor {
+) : WebViewController, WebViewStateObservable, JavaScriptExecutor, OriginPolicyAwareJavaScriptExecutor {
   /**
    * 使用跨平台初始化对象创建 iOS 控制器。
    *
@@ -203,10 +205,18 @@ class IosWebViewController(
    * 不在主线程、控制器已释放或当前页面不符合 [allowedHosts] 时不执行，避免异步扩展绕过桥的来源边界。
    */
   override fun executeJavaScript(script: String, allowedHosts: Set<String>): Boolean {
+    return executeJavaScript(script, ScriptBridgeOriginPolicy.ExactHttpsHosts(allowedHosts))
+  }
+
+  /** 按桥来源策略向当前主文档提交脚本；不安全模式仍只接受 HTTP/HTTPS 主文档。 */
+  override fun executeJavaScript(
+    script: String,
+    originPolicy: ScriptBridgeOriginPolicy,
+  ): Boolean {
     if (!NSThread.isMainThread || isDisposed) {
       return false
     }
-    if (!isTrustedJavaScriptUrl(view.URL?.absoluteString, allowedHosts)) {
+    if (!isTrustedJavaScriptUrl(view.URL?.absoluteString, originPolicy)) {
       return false
     }
     view.evaluateJavaScript(script, completionHandler = null)

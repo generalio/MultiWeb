@@ -1,8 +1,10 @@
 package io.github.multiweb.desktop
 
+import io.github.multiweb.extension.OriginPolicyAwareScriptBridge
 import io.github.multiweb.extension.ScriptBridge
 import io.github.multiweb.extension.ScriptBridgeCall
 import io.github.multiweb.extension.ScriptBridgeFacade
+import io.github.multiweb.extension.ScriptBridgeOriginPolicy
 import io.github.multiweb.extension.ScriptBridgeResponse
 import io.github.multiweb.extension.ScriptBridgeWithFacade
 import java.lang.reflect.Proxy
@@ -12,6 +14,7 @@ import org.cef.callback.CefQueryCallback
 import kotlin.test.Test
 import kotlin.test.assertContains
 import kotlin.test.assertEquals
+import kotlin.test.assertFalse
 import kotlin.test.assertFailsWith
 import kotlin.test.assertTrue
 
@@ -37,7 +40,7 @@ class DesktopScriptBridgeConfigurationTest {
     assertContains(configuration.injectionScript(), "window.location.hostname")
     assertContains(
       configuration.injectionScript(),
-      "window.location.port !== '' && window.location.port !== '443'",
+      "window.location.port === '' || window.location.port === '443'",
     )
     assertContains(configuration.injectionScript(), "JSON.parse(requestOrMethod)")
   }
@@ -51,6 +54,52 @@ class DesktopScriptBridgeConfigurationTest {
     assertEquals(false, isTrustedJavaScriptUrl("https://example.com:8443/page", allowedHosts))
     assertEquals(false, isTrustedJavaScriptUrl("http://example.com/page", allowedHosts))
     assertEquals(false, isTrustedJavaScriptUrl("https://example.com/page", emptySet()))
+  }
+
+  @Test
+  fun `不安全兼容模式仅接受 HTTP HTTPS 主框架`() {
+    val configuration = DesktopScriptBridgeConfiguration.create(listOf(unsafeBridge())).single()
+
+    assertTrue(configuration.isAllowedUrl("https://legacy.example:8443/page"))
+    assertTrue(configuration.isAllowedUrl("http://legacy.example:8080/page"))
+    assertFalse(configuration.isAllowedUrl("file:///tmp/page.html"))
+    assertFalse(configuration.isAllowedUrl("data:text/html,legacy"))
+    assertFalse(configuration.isAllowedUrl("multiweb://legacy.example/page"))
+    assertContains(configuration.injectionScript(), "window.top === window")
+
+    val handler = DesktopScriptBridgeHandler(configuration)
+    val accepted = RecordingQueryCallback()
+    handler.onQuery(
+      browser = proxy(),
+      frame = frame("http://legacy.example/page", isMain = true),
+      queryId = 1L,
+      request = "ping:",
+      persistent = false,
+      callback = accepted,
+    )
+    assertEquals("{\"isSuccess\":true,\"payload\":\"legacy\",\"errorCode\":null}", accepted.response)
+
+    val rejected = RecordingQueryCallback()
+    handler.onQuery(
+      browser = proxy(),
+      frame = frame("file:///tmp/page.html", isMain = true),
+      queryId = 2L,
+      request = "ping:",
+      persistent = false,
+      callback = rejected,
+    )
+    assertEquals(403, rejected.failureCode)
+
+    val childFrame = RecordingQueryCallback()
+    handler.onQuery(
+      browser = proxy(),
+      frame = frame("https://legacy.example/page", isMain = false),
+      queryId = 3L,
+      request = "ping:",
+      persistent = false,
+      callback = childFrame,
+    )
+    assertEquals(403, childFrame.failureCode)
   }
 
   @Test
@@ -195,6 +244,18 @@ class DesktopScriptBridgeConfigurationTest {
 
       override fun handle(call: ScriptBridgeCall): ScriptBridgeResponse {
         return ScriptBridgeResponse(isSuccess = true, payload = payload)
+      }
+    }
+  }
+
+  private fun unsafeBridge(): ScriptBridge {
+    return object : OriginPolicyAwareScriptBridge {
+      override val name = "multiWeb"
+      override val allowedHosts = emptySet<String>()
+      override val originPolicy = ScriptBridgeOriginPolicy.UnsafeAnyHttpOrHttps
+
+      override fun handle(call: ScriptBridgeCall): ScriptBridgeResponse {
+        return ScriptBridgeResponse(isSuccess = true, payload = "legacy")
       }
     }
   }

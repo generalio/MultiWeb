@@ -29,9 +29,11 @@ import io.github.multiweb.api.WebViewController
 import io.github.multiweb.api.WebViewState
 import io.github.multiweb.api.WebViewStateObservable
 import io.github.multiweb.extension.DownloadRequest
+import io.github.multiweb.extension.OriginPolicyAwareJavaScriptExecutor
 import io.github.multiweb.extension.PageErrorEvent
 import io.github.multiweb.extension.PageFinishedEvent
 import io.github.multiweb.extension.PageStartedEvent
+import io.github.multiweb.extension.ScriptBridgeOriginPolicy
 import io.github.multiweb.extension.WebContextAction
 import io.github.multiweb.extension.WebFileChooserHandler
 import io.github.multiweb.extension.WebFileChooserMode
@@ -69,7 +71,7 @@ class AndroidWebViewController(
   private val extensions: List<WebViewExtension> = emptyList(),
   /** 创建原生 WebView 的工厂，可用于注入业务自定义 WebView 子类。 */
   private val webViewFactory: AndroidWebViewFactory = DefaultAndroidWebViewFactory,
-) : WebViewController, WebViewStateObservable, JavaScriptExecutor {
+) : WebViewController, WebViewStateObservable, JavaScriptExecutor, OriginPolicyAwareJavaScriptExecutor {
   /**
    * 使用跨平台初始化对象创建 Android 控制器。
    *
@@ -209,6 +211,22 @@ class AndroidWebViewController(
     }
     view.evaluateJavascript(script, null)
     return true
+  }
+
+  /**
+   * 按桥来源策略向当前主文档提交脚本。
+   *
+   * Android 不支持 [ScriptBridgeOriginPolicy.UnsafeAnyHttpOrHttps]，原因是 AndroidX WebKit 无法在不使用全局 `*`
+   * 的情况下匹配任意 HTTP/HTTPS 主机；全局规则会使桥对象进入 `file:`、`data:` 与子框架，故必须拒绝。
+   */
+  override fun executeJavaScript(
+    script: String,
+    originPolicy: ScriptBridgeOriginPolicy,
+  ): Boolean {
+    if (originPolicy !is ScriptBridgeOriginPolicy.ExactHttpsHosts) {
+      return false
+    }
+    return executeJavaScript(script, originPolicy.hosts)
   }
 
   /** 通知 WebView 宿主进入暂停状态。 */

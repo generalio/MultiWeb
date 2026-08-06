@@ -9,8 +9,10 @@ import androidx.webkit.WebViewFeature
 import io.github.multiweb.extension.ScriptBridge
 import io.github.multiweb.extension.ScriptBridgeCall
 import io.github.multiweb.extension.ScriptBridgeFacade
+import io.github.multiweb.extension.ScriptBridgeOriginPolicy
 import io.github.multiweb.extension.ScriptBridgeResponse
 import io.github.multiweb.extension.ScriptBridgeWithFacade
+import io.github.multiweb.extension.resolvedOriginPolicy
 import org.json.JSONObject
 import java.net.URI
 
@@ -18,7 +20,8 @@ import java.net.URI
  * 通过 AndroidX WebKit 的 Web Message Listener 安装受限来源的 JS 桥。
  *
  * 不使用 `addJavascriptInterface`：后者会把整个对象暴露给所有已加载页面，无法满足扩展 API 的精确
- * 域名限制。消息桥仅允许 HTTPS 精确主机名、主框架页面与 JSON 文本协议。
+ * 域名限制。AndroidX WebKit 无法安全地表达“任意 HTTP/HTTPS 主机但排除其他来源”的规则，因此该平台仅支持
+ * 精确 HTTPS 主机；不安全全来源策略会被明确拒绝。
  */
 internal object AndroidScriptBridgeInstaller {
   fun install(
@@ -68,6 +71,8 @@ internal data class AndroidScriptBridgeConfiguration(
   val transportName: String,
   /** 网页公开的受限方法门面；未声明时只暴露消息通道。 */
   val facade: ScriptBridgeFacade?,
+  /** 当前桥的有效来源策略；Android 仅接受精确 HTTPS 主机策略。 */
+  val originPolicy: ScriptBridgeOriginPolicy.ExactHttpsHosts,
   /** 规范化后的精确 HTTPS 主机名，仅匹配默认 HTTPS 端口 443。 */
   val allowedHosts: Set<String>,
   val allowedOriginRules: Set<String>,
@@ -167,11 +172,15 @@ internal data class AndroidScriptBridgeConfiguration(
             }
           }
         }
-        require(bridge.allowedHosts.isNotEmpty()) {
+        val originPolicy = bridge.resolvedOriginPolicy()
+        require(originPolicy is ScriptBridgeOriginPolicy.ExactHttpsHosts) {
+          "Android System WebView 无法安全支持 UnsafeAnyHttpOrHttps；请配置精确 HTTPS 主机。"
+        }
+        require(originPolicy.hosts.isNotEmpty()) {
           "JS 桥必须声明至少一个受信任主机：${bridge.name}"
         }
 
-        val allowedHosts = bridge.allowedHosts.mapTo(linkedSetOf()) { host ->
+        val allowedHosts = originPolicy.hosts.mapTo(linkedSetOf()) { host ->
           require(isValidHost(host)) {
             "JS 桥只允许精确主机名且不支持通配符：$host"
           }
@@ -181,6 +190,7 @@ internal data class AndroidScriptBridgeConfiguration(
           bridge = bridge,
           transportName = transportName,
           facade = facade,
+          originPolicy = ScriptBridgeOriginPolicy.ExactHttpsHosts(allowedHosts),
           allowedHosts = allowedHosts,
           allowedOriginRules = allowedHosts.mapTo(linkedSetOf()) { "https://$it" },
         )
@@ -214,9 +224,25 @@ internal fun isTrustedJavaScriptUrl(url: String?, allowedHosts: Set<String>): Bo
     origin.port in setOf(-1, 443)
 }
 
+/**
+ * Android 对策略化脚本执行的来源复核。
+ *
+ * [ScriptBridgeOriginPolicy.UnsafeAnyHttpOrHttps] 会返回 `false`，因为 AndroidX WebKit 没有同时限定任意 HTTP/HTTPS
+ * 主机、排除 `file:`/`data:` 与子框架的来源规则，不能以全局 `*` 代替。
+ */
+internal fun isTrustedJavaScriptUrl(
+  url: String?,
+  originPolicy: ScriptBridgeOriginPolicy,
+): Boolean {
+  return when (originPolicy) {
+    is ScriptBridgeOriginPolicy.ExactHttpsHosts -> isTrustedJavaScriptUrl(url, originPolicy.hosts)
+    ScriptBridgeOriginPolicy.UnsafeAnyHttpOrHttps -> false
+  }
+}
+
 /** 复核来源与 AndroidX 注入规则一致：仅 HTTPS、精确主机及默认端口 443。 */
 private fun AndroidScriptBridgeConfiguration.isAllowedOrigin(origin: Uri): Boolean {
-  return isTrustedJavaScriptUrl(origin.toString(), allowedHosts)
+  return isTrustedJavaScriptUrl(origin.toString(), originPolicy)
 }
 
 /** 将受限来源的网页消息转换为 [ScriptBridge] 调用。 */

@@ -1,8 +1,10 @@
 package io.github.multiweb.android
 
+import io.github.multiweb.extension.OriginPolicyAwareScriptBridge
 import io.github.multiweb.extension.ScriptBridge
 import io.github.multiweb.extension.ScriptBridgeCall
 import io.github.multiweb.extension.ScriptBridgeFacade
+import io.github.multiweb.extension.ScriptBridgeOriginPolicy
 import io.github.multiweb.extension.ScriptBridgeResponse
 import io.github.multiweb.extension.ScriptBridgeWithFacade
 import kotlin.test.Test
@@ -47,6 +49,32 @@ class AndroidScriptBridgeConfigurationTest {
     assertFailsWith<IllegalArgumentException> {
       AndroidScriptBridgeConfiguration.create(listOf(bridge(hosts = setOf("*.example.com"))))
     }
+  }
+
+  @Test
+  fun `Android 明确拒绝任意 HTTP HTTPS 的不安全来源策略`() {
+    val exception = assertFailsWith<IllegalArgumentException> {
+      AndroidScriptBridgeConfiguration.create(
+        listOf(
+          object : OriginPolicyAwareScriptBridge {
+            override val name = "AndroidWebView"
+            override val allowedHosts = emptySet<String>()
+            override val originPolicy = ScriptBridgeOriginPolicy.UnsafeAnyHttpOrHttps
+
+            override fun handle(call: ScriptBridgeCall): ScriptBridgeResponse? = null
+          },
+        ),
+      )
+    }
+
+    assertContains(exception.message.orEmpty(), "UnsafeAnyHttpOrHttps")
+    assertEquals(
+      false,
+      isTrustedJavaScriptUrl(
+        "https://legacy.example/page",
+        ScriptBridgeOriginPolicy.UnsafeAnyHttpOrHttps,
+      ),
+    )
   }
 
   @Test

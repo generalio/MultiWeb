@@ -1,8 +1,10 @@
 package io.github.multiweb.ios
 
+import io.github.multiweb.extension.OriginPolicyAwareScriptBridge
 import io.github.multiweb.extension.ScriptBridge
 import io.github.multiweb.extension.ScriptBridgeCall
 import io.github.multiweb.extension.ScriptBridgeFacade
+import io.github.multiweb.extension.ScriptBridgeOriginPolicy
 import io.github.multiweb.extension.ScriptBridgeResponse
 import io.github.multiweb.extension.ScriptBridgeWithFacade
 import kotlinx.cinterop.ExperimentalForeignApi
@@ -24,7 +26,7 @@ class IosScriptBridgeConfigurationTest {
     assertFalse(configuration.isAllowedUrl("https://example.com:8443/page"))
     assertContains(
       configuration.injectionScript(),
-      "window.location.port !== '' && window.location.port !== '443'",
+      "window.location.port === '' || window.location.port === '443'",
     )
     assertContains(configuration.injectionScript(), "window.location.hostname === \"example.com\"")
   }
@@ -38,6 +40,19 @@ class IosScriptBridgeConfigurationTest {
     assertFalse(isTrustedJavaScriptUrl("https://example.com:8443/page", allowedHosts))
     assertFalse(isTrustedJavaScriptUrl("http://example.com/page", allowedHosts))
     assertFalse(isTrustedJavaScriptUrl("https://example.com/page", emptySet()))
+  }
+
+  @Test
+  fun `不安全兼容模式仅接受主框架 HTTP HTTPS 页面`() {
+    val configuration = IosScriptBridgeConfiguration.create(listOf(unsafeBridge())).single()
+
+    assertTrue(configuration.isAllowedUrl("https://legacy.example:8443/page"))
+    assertTrue(configuration.isAllowedUrl("http://legacy.example:8080/page"))
+    assertFalse(configuration.isAllowedUrl("file:///private/tmp/page.html"))
+    assertFalse(configuration.isAllowedUrl("data:text/html,legacy"))
+    assertFalse(configuration.isAllowedUrl("multiweb://legacy.example/page"))
+    assertContains(configuration.injectionScript(), "window.top === window")
+    assertContains(configuration.injectionScript(), "window.location.protocol === 'http:'")
   }
 
   @Test
@@ -86,6 +101,16 @@ class IosScriptBridgeConfigurationTest {
     return object : ScriptBridge {
       override val name: String = "multiWeb"
       override val allowedHosts: Set<String> = setOf("example.com")
+
+      override fun handle(call: ScriptBridgeCall): ScriptBridgeResponse? = null
+    }
+  }
+
+  private fun unsafeBridge(): ScriptBridge {
+    return object : OriginPolicyAwareScriptBridge {
+      override val name: String = "multiWeb"
+      override val allowedHosts: Set<String> = emptySet()
+      override val originPolicy: ScriptBridgeOriginPolicy = ScriptBridgeOriginPolicy.UnsafeAnyHttpOrHttps
 
       override fun handle(call: ScriptBridgeCall): ScriptBridgeResponse? = null
     }
