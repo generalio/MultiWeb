@@ -64,7 +64,9 @@ jobs:
           ORG_GRADLE_PROJECT_mavenCentralPassword: ${{ secrets.MAVEN_CENTRAL_PASSWORD }}
           ORG_GRADLE_PROJECT_signingInMemoryKey: ${{ secrets.SIGNING_KEY }}
           ORG_GRADLE_PROJECT_signingInMemoryKeyPassword: ${{ secrets.SIGNING_PASSWORD }}
+        # Kotlin/Native CInterop commonization 会在 metadata 编译期间触发 Gradle 配置缓存限制，
+        # 正式发布必须禁用配置缓存，避免所有构件上传后因缓存写入而将工作流标记为失败。
         run: >-
           ./gradlew apiCheck publishAndReleaseToMavenCentral
           -PMULTIWEB_ENABLE_MAVEN_CENTRAL=true -PVERSION_NAME=${{ steps.version.outputs.value }}
-          --no-parallel -Dorg.gradle.jvmargs=-Xmx2g
+          --no-parallel --no-configuration-cache -Dorg.gradle.jvmargs=-Xmx2g
