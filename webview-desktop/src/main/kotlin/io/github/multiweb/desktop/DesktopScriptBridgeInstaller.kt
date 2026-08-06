@@ -34,10 +34,7 @@ internal data class DesktopScriptBridgeConfiguration(
 ) {
   /** 判断 JCEF 回调所在的主框架是否属于受信任来源。 */
   fun isAllowedUrl(url: String): Boolean {
-    val parsed = runCatching { URI(url) }.getOrNull() ?: return false
-    return parsed.scheme.equals("https", ignoreCase = true) &&
-      parsed.host?.lowercase() in allowedHosts &&
-      parsed.port in setOf(-1, 443)
+    return isTrustedJavaScriptUrl(url, allowedHosts)
   }
 
   /**
@@ -195,6 +192,22 @@ internal data class DesktopScriptBridgeConfiguration(
       return parsedHost == normalizedHost
     }
   }
+}
+
+/**
+ * 复核脚本操作的当前主文档来源。
+ *
+ * 规则与 JCEF 桥注入和消息处理保持一致：仅允许 HTTPS、精确主机及默认端口 443。该函数同时供消息桥和
+ * [io.github.multiweb.api.JavaScriptExecutor] 使用，避免两条执行路径的安全边界不一致。
+ */
+internal fun isTrustedJavaScriptUrl(url: String?, allowedHosts: Set<String>): Boolean {
+  if (url == null || allowedHosts.isEmpty()) {
+    return false
+  }
+  val parsed = runCatching { URI(url) }.getOrNull() ?: return false
+  return parsed.scheme.equals("https", ignoreCase = true) &&
+    parsed.host?.lowercase() in allowedHosts.mapTo(hashSetOf()) { it.lowercase() } &&
+    parsed.port in setOf(-1, 443)
 }
 
 /** 管理 Desktop 桥的 JCEF 路由、处理器和注入生命周期。 */

@@ -3,6 +3,10 @@ public final class io/github/multiweb/api/DefaultNavigationPolicy : io/github/mu
 	public fun decide (Lio/github/multiweb/api/NavigationRequest;)Lio/github/multiweb/api/NavigationDecision;
 }
 
+public abstract interface class io/github/multiweb/api/JavaScriptExecutor {
+	public abstract fun executeJavaScript (Ljava/lang/String;Ljava/util/Set;)Z
+}
+
 public final class io/github/multiweb/api/NavigationDecision : java/lang/Enum {
 	public static final field Allow Lio/github/multiweb/api/NavigationDecision;
 	public static final field Cancel Lio/github/multiweb/api/NavigationDecision;

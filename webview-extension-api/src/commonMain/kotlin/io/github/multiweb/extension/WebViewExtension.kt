@@ -1,6 +1,7 @@
 package io.github.multiweb.extension
 
 import io.github.multiweb.api.WebError
+import io.github.multiweb.api.WebViewController
 
 /**
  * WebView 的跨平台扩展契约。
@@ -30,6 +31,20 @@ interface WebViewExtension {
 
   /** 页面或扩展请求宿主级 UI 操作时调用，例如切换沉浸式全屏。 */
   fun onHostUiRequest(request: HostUiRequest) = Unit
+}
+
+/**
+ * 需要感知控制器生命周期的可选扩展。
+ *
+ * 该子接口独立于 [WebViewExtension]，避免给已发布父接口新增成员而破坏既有实现的二进制兼容性。控制器仅对实现
+ * 本接口的扩展分发生命周期事件；回调中不得持有平台原生视图，且应在 [onControllerDisposed] 时清理控制器引用。
+ */
+interface WebViewControllerLifecycleExtension : WebViewExtension {
+  /** 控制器及其内部安全策略、原生 Client 和桥安装均已完成后调用。 */
+  fun onControllerAttached(controller: WebViewController) = Unit
+
+  /** 控制器释放前调用；扩展必须清理与该控制器关联的状态和引用。 */
+  fun onControllerDisposed() = Unit
 }
 
 /** 主文档开始加载事件。 */

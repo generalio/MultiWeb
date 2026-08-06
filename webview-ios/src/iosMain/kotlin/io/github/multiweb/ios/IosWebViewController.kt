@@ -6,6 +6,7 @@ import io.github.multiweb.ios.filechooser.MultiWebFileChooserDelegateProtocol
 import io.github.multiweb.api.NavigationDecision
 import io.github.multiweb.api.NavigationPolicy
 import io.github.multiweb.api.NavigationRequest
+import io.github.multiweb.api.JavaScriptExecutor
 import io.github.multiweb.api.WebError
 import io.github.multiweb.api.WebErrorCategory
 import io.github.multiweb.api.WebRequest
@@ -20,6 +21,7 @@ import io.github.multiweb.extension.WebFileChooserHandler
 import io.github.multiweb.extension.WebFileChooserRequest
 import io.github.multiweb.extension.WebFileChooserResult
 import io.github.multiweb.extension.WebViewExtension
+import io.github.multiweb.extension.WebViewControllerLifecycleExtension
 import io.github.multiweb.extension.WebViewInitialization
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -76,7 +78,7 @@ class IosWebViewController(
   private val onExternalNavigation: (NavigationRequest) -> Unit = {},
   /** 可选的平台能力扩展；事件按列表顺序派发。 */
   private val extensions: List<WebViewExtension> = emptyList(),
-) : WebViewController, WebViewStateObservable {
+) : WebViewController, WebViewStateObservable, JavaScriptExecutor {
   /**
    * 使用跨平台初始化对象创建 iOS 控制器。
    *
@@ -137,6 +139,9 @@ class IosWebViewController(
     scriptBridgeInstallation.attach(view)
     view.navigationDelegate = navigationDelegate
     view.UIDelegate = uiDelegate
+    extensions.filterIsInstance<WebViewControllerLifecycleExtension>().forEach { extension ->
+      extension.onControllerAttached(this)
+    }
   }
 
   override fun load(request: WebRequest) {
@@ -192,12 +197,33 @@ class IosWebViewController(
     )
   }
 
+  /**
+   * 向当前受信任主文档提交脚本。
+   *
+   * 不在主线程、控制器已释放或当前页面不符合 [allowedHosts] 时不执行，避免异步扩展绕过桥的来源边界。
+   */
+  override fun executeJavaScript(script: String, allowedHosts: Set<String>): Boolean {
+    if (!NSThread.isMainThread || isDisposed) {
+      return false
+    }
+    if (!isTrustedJavaScriptUrl(view.URL?.absoluteString, allowedHosts)) {
+      return false
+    }
+    view.evaluateJavaScript(script, completionHandler = null)
+    return true
+  }
+
   override fun dispose() {
     checkMainThread()
     if (isDisposed) {
       return
     }
 
+    // 先切换状态，保证扩展释放过程中不能再向即将销毁的 WKWebView 提交脚本。
+    isDisposed = true
+    extensions.filterIsInstance<WebViewControllerLifecycleExtension>().forEach { extension ->
+      extension.onControllerDisposed()
+    }
     activeFileChooserCompletion?.invoke(null)
     activeFileChooserCompletion = null
     view.stopLoading()
@@ -206,7 +232,6 @@ class IosWebViewController(
     scriptBridgeInstallation.dispose()
     view.removeFromSuperview()
     state = state.copy(isLoading = false)
-    isDisposed = true
   }
 
   private fun createConfiguration(): WKWebViewConfiguration {

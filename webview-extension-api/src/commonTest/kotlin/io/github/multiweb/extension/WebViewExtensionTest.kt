@@ -2,8 +2,12 @@ package io.github.multiweb.extension
 
 import io.github.multiweb.api.WebError
 import io.github.multiweb.api.WebErrorCategory
+import io.github.multiweb.api.WebRequest
+import io.github.multiweb.api.WebViewController
+import io.github.multiweb.api.WebViewState
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertSame
 import kotlin.test.assertTrue
 
 class WebViewExtensionTest {
@@ -43,5 +47,45 @@ class WebViewExtensionTest {
     assertEquals("{\"top\":24}", bridge.handle(ScriptBridgeCall("getInsets"))?.payload)
     assertEquals("unknown_method", bridge.handle(ScriptBridgeCall("other"))?.errorCode)
     assertEquals("", bridge.handle(ScriptBridgeCall("other"))?.payload)
+  }
+
+  @Test
+  fun 控制器生命周期扩展仅在显式实现时接收控制器引用() {
+    var attachedController: WebViewController? = null
+    var disposed = false
+    val extension = object : WebViewControllerLifecycleExtension {
+      override fun onControllerAttached(controller: WebViewController) {
+        attachedController = controller
+      }
+
+      override fun onControllerDisposed() {
+        disposed = true
+      }
+    }
+    val controller = TestWebViewController
+
+    extension.onControllerAttached(controller)
+    extension.onControllerDisposed()
+
+    assertSame(controller, attachedController)
+    assertTrue(disposed)
+  }
+
+  private object TestWebViewController : WebViewController {
+    override val state: WebViewState = WebViewState()
+
+    override fun load(request: WebRequest) = Unit
+
+    override fun reload() = Unit
+
+    override fun goBack() = Unit
+
+    override fun goForward() = Unit
+
+    override fun stopLoading() = Unit
+
+    override fun clearSession() = Unit
+
+    override fun dispose() = Unit
   }
 }

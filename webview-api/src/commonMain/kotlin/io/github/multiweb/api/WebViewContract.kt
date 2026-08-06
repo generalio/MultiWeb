@@ -46,6 +46,21 @@ interface WebViewStateObservable {
   val stateFlow: StateFlow<WebViewState>
 }
 
+/**
+ * 受控向当前主文档提交 JavaScript 的可选能力。
+ *
+ * 该接口只供宿主或受限扩展调用，不能据此把任意原生对象暴露给网页。[allowedHosts] 必须是当前调用方已配置的
+ * 精确可信 HTTPS 主机集合；平台会在提交前再次校验当前主文档来源。返回 `true` 仅表示脚本已提交给平台，
+ * 不承诺网页执行结果；当前平台不支持、控制器已释放或来源不可信时返回 `false`。
+ */
+interface JavaScriptExecutor {
+  /** 向可信当前主文档提交脚本；[allowedHosts] 不能为空且不支持通配符。 */
+  fun executeJavaScript(
+    script: String,
+    allowedHosts: Set<String>,
+  ): Boolean
+}
+
 /** 一次页面加载请求。 */
 data class WebRequest(
   /** 待加载的完整 URL。调用方负责提供符合导航策略的地址。 */

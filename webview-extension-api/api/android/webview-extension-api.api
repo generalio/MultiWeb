@@ -30,11 +30,15 @@ public final class io/github/multiweb/extension/HostUiRequest$SetFullscreen : io
 	public fun toString ()Ljava/lang/String;
 }
 
-public final class io/github/multiweb/extension/NativeWebViewBridgeExtension : io/github/multiweb/extension/WebViewExtension {
+public final class io/github/multiweb/extension/NativeWebViewBridgeExtension : io/github/multiweb/extension/WebViewControllerLifecycleExtension {
 	public fun <init> (Ljava/util/Set;Lio/github/multiweb/extension/NativeWebViewBridgeHost;Ljava/lang/String;)V
 	public synthetic fun <init> (Ljava/util/Set;Lio/github/multiweb/extension/NativeWebViewBridgeHost;Ljava/lang/String;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public fun <init> (Ljava/util/Set;Lio/github/multiweb/extension/NativeWebViewBridgeHost;ZLjava/lang/String;)V
+	public synthetic fun <init> (Ljava/util/Set;Lio/github/multiweb/extension/NativeWebViewBridgeHost;ZLjava/lang/String;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
 	public fun getScriptBridges ()Ljava/util/List;
 	public fun onContextAction (Lio/github/multiweb/extension/WebContextAction;)V
+	public fun onControllerAttached (Lio/github/multiweb/api/WebViewController;)V
+	public fun onControllerDisposed ()V
 	public fun onDownloadRequested (Lio/github/multiweb/extension/DownloadRequest;)V
 	public fun onHostUiRequest (Lio/github/multiweb/extension/HostUiRequest;)V
 	public fun onPageError (Lio/github/multiweb/extension/PageErrorEvent;)V
@@ -357,6 +361,23 @@ public final class io/github/multiweb/extension/WebFileChooserResult$Selected : 
 	public final fun getUris ()Ljava/util/List;
 	public fun hashCode ()I
 	public fun toString ()Ljava/lang/String;
+}
+
+public abstract interface class io/github/multiweb/extension/WebViewControllerLifecycleExtension : io/github/multiweb/extension/WebViewExtension {
+	public abstract fun onControllerAttached (Lio/github/multiweb/api/WebViewController;)V
+	public abstract fun onControllerDisposed ()V
+}
+
+public final class io/github/multiweb/extension/WebViewControllerLifecycleExtension$DefaultImpls {
+	public static fun getScriptBridges (Lio/github/multiweb/extension/WebViewControllerLifecycleExtension;)Ljava/util/List;
+	public static fun onContextAction (Lio/github/multiweb/extension/WebViewControllerLifecycleExtension;Lio/github/multiweb/extension/WebContextAction;)V
+	public static fun onControllerAttached (Lio/github/multiweb/extension/WebViewControllerLifecycleExtension;Lio/github/multiweb/api/WebViewController;)V
+	public static fun onControllerDisposed (Lio/github/multiweb/extension/WebViewControllerLifecycleExtension;)V
+	public static fun onDownloadRequested (Lio/github/multiweb/extension/WebViewControllerLifecycleExtension;Lio/github/multiweb/extension/DownloadRequest;)V
+	public static fun onHostUiRequest (Lio/github/multiweb/extension/WebViewControllerLifecycleExtension;Lio/github/multiweb/extension/HostUiRequest;)V
+	public static fun onPageError (Lio/github/multiweb/extension/WebViewControllerLifecycleExtension;Lio/github/multiweb/extension/PageErrorEvent;)V
+	public static fun onPageFinished (Lio/github/multiweb/extension/WebViewControllerLifecycleExtension;Lio/github/multiweb/extension/PageFinishedEvent;)V
+	public static fun onPageStarted (Lio/github/multiweb/extension/WebViewControllerLifecycleExtension;Lio/github/multiweb/extension/PageStartedEvent;)V
 }
 
 public abstract interface class io/github/multiweb/extension/WebViewExtension {

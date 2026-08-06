@@ -30,6 +30,17 @@ class IosScriptBridgeConfigurationTest {
   }
 
   @Test
+  fun `脚本执行仅接受可信 HTTPS 默认端口主文档`() {
+    val allowedHosts = setOf("EXAMPLE.com")
+
+    assertTrue(isTrustedJavaScriptUrl("https://example.com/page", allowedHosts))
+    assertTrue(isTrustedJavaScriptUrl("https://example.com:443/page", allowedHosts))
+    assertFalse(isTrustedJavaScriptUrl("https://example.com:8443/page", allowedHosts))
+    assertFalse(isTrustedJavaScriptUrl("http://example.com/page", allowedHosts))
+    assertFalse(isTrustedJavaScriptUrl("https://example.com/page", emptySet()))
+  }
+
+  @Test
   fun `JavaScript 字符串会转义行与段分隔符`() {
     assertEquals("\"\\u2028\\u2029\"", "\u2028\u2029".toJavaScriptString())
   }

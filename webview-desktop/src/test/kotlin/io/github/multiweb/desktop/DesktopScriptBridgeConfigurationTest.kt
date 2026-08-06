@@ -43,6 +43,17 @@ class DesktopScriptBridgeConfigurationTest {
   }
 
   @Test
+  fun `脚本执行仅接受可信 HTTPS 默认端口主文档`() {
+    val allowedHosts = setOf("EXAMPLE.com")
+
+    assertEquals(true, isTrustedJavaScriptUrl("https://example.com/page", allowedHosts))
+    assertEquals(true, isTrustedJavaScriptUrl("https://example.com:443/page", allowedHosts))
+    assertEquals(false, isTrustedJavaScriptUrl("https://example.com:8443/page", allowedHosts))
+    assertEquals(false, isTrustedJavaScriptUrl("http://example.com/page", allowedHosts))
+    assertEquals(false, isTrustedJavaScriptUrl("https://example.com/page", emptySet()))
+  }
+
+  @Test
   fun `拒绝重复桥名称和不安全主机`() {
     assertFailsWith<IllegalArgumentException> {
       DesktopScriptBridgeConfiguration.create(

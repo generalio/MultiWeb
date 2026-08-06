@@ -1,5 +1,8 @@
 package io.github.multiweb.extension
 
+import io.github.multiweb.api.JavaScriptExecutor
+import io.github.multiweb.api.WebViewController
+
 /**
  * 旧 Android WebView 业务桥的跨平台宿主委托。
  *
@@ -19,7 +22,12 @@ sealed interface NativeWebViewBridgeRequest {
     val url: String,
   ) : NativeWebViewBridgeRequest
 
-  /** 请求宿主在当前页面后续加载完成时执行脚本；是否支持及执行边界由宿主决定。 */
+  /**
+   * 请求宿主在当前页面后续加载完成时执行脚本。
+   *
+   * 默认由宿主决定是否支持；当 [NativeWebViewBridgeExtension] 显式开启受控脚本执行时，扩展会保存最新脚本，
+   * 并仅在受信任页面完成加载后通过控制器执行。
+   */
   data class SetPageLoadScript(
     /** 网页提供的 JavaScript 文本。 */
     val script: String,
@@ -37,7 +45,12 @@ sealed interface NativeWebViewBridgeRequest {
     val path: String,
   ) : NativeWebViewBridgeRequest
 
-  /** 请求宿主在当前网页上下文执行脚本；宿主必须自行限制脚本来源和执行时机。 */
+  /**
+   * 请求宿主在当前网页上下文执行脚本。
+   *
+   * 默认由宿主决定是否支持；当 [NativeWebViewBridgeExtension] 显式开启受控脚本执行时，扩展会通过控制器再次
+   * 校验当前主文档来源，不能借此向未受信任页面提交脚本。
+   */
   data class ExecuteJavaScript(
     /** 网页提供的 JavaScript 文本。 */
     val script: String,
@@ -89,8 +102,9 @@ sealed interface NativeWebViewBridgeResult {
  * 兼容旧 `window.AndroidWebView` 方法名的受限跨平台扩展。
  *
  * 所有方法只能通过 [allowedHosts] 中的精确 HTTPS 主机调用，并统一返回 Promise。该扩展只负责把网页调用
- * 转换为 [NativeWebViewBridgeRequest]；账号、路由、权限、下载、传感器与脚本执行均由 [host] 决定。Promise
- * 成功时返回的对象包含 `isSuccess` 与 [NativeWebViewBridgeResult.Success.payload] 对应的 `payload` 字段。
+ * 转换为 [NativeWebViewBridgeRequest]；账号、路由、权限、下载与传感器均由 [host] 决定。默认情况下脚本执行也
+ * 交由 [host] 处理；仅显式开启后才会由扩展使用 [JavaScriptExecutor] 受控执行。Promise 成功时返回的对象包含
+ * `isSuccess` 与 [NativeWebViewBridgeResult.Success.payload] 对应的 `payload` 字段。
  */
 class NativeWebViewBridgeExtension(
   /** 允许使用该桥的精确 HTTPS 主机名集合。 */
@@ -99,7 +113,35 @@ class NativeWebViewBridgeExtension(
   private val host: NativeWebViewBridgeHost,
   /** 网页侧桥名称，默认兼容旧 Android 项目的 `AndroidWebView`。 */
   private val bridgeName: String = "AndroidWebView",
-) : WebViewExtension {
+) : WebViewControllerLifecycleExtension {
+  /**
+   * 创建启用受控旧脚本执行能力的桥。
+   *
+   * 关闭时 [NativeWebViewBridgeRequest.SetPageLoadScript] 与 [NativeWebViewBridgeRequest.ExecuteJavaScript] 继续交由
+   * [host] 处理，保持既有行为。开启后这两个请求不再进入 [host]：最新页面脚本会在受信任主文档完成加载后执行，
+   * 即时脚本会在收到请求时执行。控制器未提供或已释放时返回 `javascript_executor_unavailable`；当前主文档来源、
+   * 线程或平台状态不满足执行条件时返回 `javascript_execution_rejected`。
+   */
+  constructor(
+    allowedHosts: Set<String>,
+    host: NativeWebViewBridgeHost,
+    enableLegacyJavaScriptExecution: Boolean,
+    bridgeName: String = "AndroidWebView",
+  ) : this(
+    allowedHosts = allowedHosts,
+    host = host,
+    bridgeName = bridgeName,
+  ) {
+    this.enableLegacyJavaScriptExecution = enableLegacyJavaScriptExecution
+  }
+
+  /** 是否启用由框架执行旧桥脚本；默认关闭以维持最小权限和既有宿主语义。 */
+  private var enableLegacyJavaScriptExecution: Boolean = false
+  /** 生命周期绑定的脚本执行器；控制器释放后必须清空。 */
+  private var javaScriptExecutor: JavaScriptExecutor? = null
+  /** 网页最后声明的页面完成脚本；新值会覆盖旧值，避免多次加载累积执行。 */
+  private var pageLoadScript: String? = null
+
   override val scriptBridges: List<ScriptBridge> = listOf(
     object : ScriptBridgeWithFacade {
       override val name: String = bridgeName
@@ -113,7 +155,30 @@ class NativeWebViewBridgeExtension(
     },
   )
 
+  override fun onControllerAttached(controller: WebViewController) {
+    javaScriptExecutor = controller as? JavaScriptExecutor
+  }
+
+  override fun onControllerDisposed() {
+    javaScriptExecutor = null
+    pageLoadScript = null
+  }
+
+  override fun onPageFinished(event: PageFinishedEvent) {
+    if (!enableLegacyJavaScriptExecution) {
+      return
+    }
+    val script = pageLoadScript ?: return
+    javaScriptExecutor?.executeJavaScript(script, allowedHosts)
+  }
+
   private fun handleCall(call: ScriptBridgeCall): ScriptBridgeResponse {
+    if (enableLegacyJavaScriptExecution) {
+      when (call.method) {
+        "onLoad" -> return savePageLoadScript(call.payload)
+        "exeJs" -> return executeJavaScript(call.payload)
+      }
+    }
     val request = call.toRequest()
       ?: return ScriptBridgeResponse(isSuccess = false, errorCode = "invalid_request")
     val result = runCatching { host.handle(request) }
@@ -129,6 +194,26 @@ class NativeWebViewBridgeExtension(
           errorCode = result.errorCode,
         )
       }
+    }
+  }
+
+  /** 保存最新页面脚本；只有已绑定可用执行器时才接受，避免向网页错误承诺未支持能力。 */
+  private fun savePageLoadScript(script: String): ScriptBridgeResponse {
+    if (javaScriptExecutor == null) {
+      return ScriptBridgeResponse(isSuccess = false, errorCode = JavaScriptExecutorUnavailable)
+    }
+    pageLoadScript = script
+    return ScriptBridgeResponse(isSuccess = true)
+  }
+
+  /** 立即提交网页请求的脚本；执行器会在原生侧再次复核可信来源。 */
+  private fun executeJavaScript(script: String): ScriptBridgeResponse {
+    val executor = javaScriptExecutor
+      ?: return ScriptBridgeResponse(isSuccess = false, errorCode = JavaScriptExecutorUnavailable)
+    return if (executor.executeJavaScript(script, allowedHosts)) {
+      ScriptBridgeResponse(isSuccess = true)
+    } else {
+      ScriptBridgeResponse(isSuccess = false, errorCode = JavaScriptExecutionRejected)
     }
   }
 
@@ -150,6 +235,11 @@ class NativeWebViewBridgeExtension(
   }
 
   private companion object {
+    /** 控制器未实现脚本执行器或已释放时返回的稳定错误码。 */
+    val JavaScriptExecutorUnavailable = "javascript_executor_unavailable"
+    /** 原生侧因来源、线程或平台状态拒绝脚本时返回的稳定错误码。 */
+    val JavaScriptExecutionRejected = "javascript_execution_rejected"
+
     val LegacyMethodNames = linkedSetOf(
       "savePic",
       "onLoad",

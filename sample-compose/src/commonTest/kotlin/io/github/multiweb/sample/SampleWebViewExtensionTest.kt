@@ -71,6 +71,15 @@ class SampleWebViewExtensionTest {
   }
 
   @Test
+  fun `兼容桥示例显式启用受控旧脚本执行`() {
+    val response = sampleNativeWebViewBridgeExtension().scriptBridges.single()
+      .handle(ScriptBridgeCall("onLoad", "window.initializeSample()"))
+
+    assertFalse(requireNotNull(response).isSuccess)
+    assertEquals("javascript_executor_unavailable", requireNotNull(response).errorCode)
+  }
+
+  @Test
   fun `未知桥方法明确拒绝`() {
     val response = SampleWebViewExtension().scriptBridges.single()
       .handle(ScriptBridgeCall("executeNativeCode"))

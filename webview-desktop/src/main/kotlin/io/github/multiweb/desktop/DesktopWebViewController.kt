@@ -3,6 +3,7 @@ package io.github.multiweb.desktop
 import io.github.multiweb.api.NavigationDecision
 import io.github.multiweb.api.NavigationPolicy
 import io.github.multiweb.api.NavigationRequest
+import io.github.multiweb.api.JavaScriptExecutor
 import io.github.multiweb.api.WebError
 import io.github.multiweb.api.WebErrorCategory
 import io.github.multiweb.api.WebRequest
@@ -20,6 +21,7 @@ import io.github.multiweb.extension.WebFileChooserMode
 import io.github.multiweb.extension.WebFileChooserRequest
 import io.github.multiweb.extension.WebFileChooserResult
 import io.github.multiweb.extension.WebViewExtension
+import io.github.multiweb.extension.WebViewControllerLifecycleExtension
 import io.github.multiweb.extension.WebViewInitialization
 import java.net.URI
 import java.nio.file.Files
@@ -75,7 +77,7 @@ class DesktopWebViewController(
   private val onBrowserClosed: () -> Unit = {},
   /** 可选的平台能力扩展；事件按列表顺序派发。 */
   private val extensions: List<WebViewExtension> = emptyList(),
-) : WebViewController, WebViewStateObservable {
+) : WebViewController, WebViewStateObservable, JavaScriptExecutor {
   /**
    * 使用跨平台初始化对象创建桌面控制器。
    *
@@ -163,6 +165,9 @@ class DesktopWebViewController(
     view = browser.uiComponent
     // Compose 的 SwingPanel 不保证触发 JCEF 所需的首次 Swing 绘制；主动创建可避免原生视图保持空白。
     browser.createImmediately()
+    extensions.filterIsInstance<WebViewControllerLifecycleExtension>().forEach { extension ->
+      extension.onControllerAttached(this)
+    }
   }
 
   override fun load(request: WebRequest) {
@@ -215,6 +220,23 @@ class DesktopWebViewController(
     )
   }
 
+  /**
+   * 向当前受信任主文档提交脚本。
+   *
+   * JCEF 只能在 EDT 且浏览器创建完成后安全执行脚本；来源不可信、控制器已释放或页面尚未就绪时直接拒绝。
+   */
+  override fun executeJavaScript(script: String, allowedHosts: Set<String>): Boolean {
+    if (!SwingUtilities.isEventDispatchThread() || isDisposed || !isBrowserReady) {
+      return false
+    }
+    val mainFrame = browser.mainFrame ?: return false
+    if (!isTrustedJavaScriptUrl(mainFrame.url, allowedHosts)) {
+      return false
+    }
+    mainFrame.executeJavaScript(script, "multiweb://executor", 0)
+    return true
+  }
+
   override fun dispose() {
     checkEdt()
     if (isDisposed) {
@@ -222,6 +244,9 @@ class DesktopWebViewController(
     }
 
     isDisposed = true
+    extensions.filterIsInstance<WebViewControllerLifecycleExtension>().forEach { extension ->
+      extension.onControllerDisposed()
+    }
     pendingInitialRequest = null
     pendingProgrammaticMainFrameUrls.clear()
     pendingProgrammaticMainFrameHeaders.clear()

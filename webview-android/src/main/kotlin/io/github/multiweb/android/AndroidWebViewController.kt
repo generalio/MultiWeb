@@ -20,6 +20,7 @@ import android.webkit.WebViewClient
 import io.github.multiweb.api.NavigationDecision
 import io.github.multiweb.api.NavigationPolicy
 import io.github.multiweb.api.NavigationRequest
+import io.github.multiweb.api.JavaScriptExecutor
 import io.github.multiweb.api.WebError
 import io.github.multiweb.api.WebErrorCategory
 import io.github.multiweb.api.WebRequest
@@ -37,6 +38,7 @@ import io.github.multiweb.extension.WebFileChooserMode
 import io.github.multiweb.extension.WebFileChooserRequest
 import io.github.multiweb.extension.WebFileChooserResult
 import io.github.multiweb.extension.WebViewExtension
+import io.github.multiweb.extension.WebViewControllerLifecycleExtension
 import io.github.multiweb.extension.WebViewInitialization
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -67,7 +69,7 @@ class AndroidWebViewController(
   private val extensions: List<WebViewExtension> = emptyList(),
   /** 创建原生 WebView 的工厂，可用于注入业务自定义 WebView 子类。 */
   private val webViewFactory: AndroidWebViewFactory = DefaultAndroidWebViewFactory,
-) : WebViewController, WebViewStateObservable {
+) : WebViewController, WebViewStateObservable, JavaScriptExecutor {
   /**
    * 使用跨平台初始化对象创建 Android 控制器。
    *
@@ -126,6 +128,9 @@ class AndroidWebViewController(
     }
 
     view = webViewFactory.create(context).also(::configureWebView)
+    extensions.filterIsInstance<WebViewControllerLifecycleExtension>().forEach { extension ->
+      extension.onControllerAttached(this)
+    }
   }
 
   override fun load(request: WebRequest) {
@@ -190,6 +195,22 @@ class AndroidWebViewController(
     )
   }
 
+  /**
+   * 向当前受信任主文档提交脚本。
+   *
+   * 不在主线程、控制器已释放或当前页面不符合 [allowedHosts] 时不执行，避免异步扩展绕过桥的来源边界。
+   */
+  override fun executeJavaScript(script: String, allowedHosts: Set<String>): Boolean {
+    if (Looper.myLooper() != Looper.getMainLooper() || isDisposed) {
+      return false
+    }
+    if (!isTrustedJavaScriptUrl(view.url, allowedHosts)) {
+      return false
+    }
+    view.evaluateJavascript(script, null)
+    return true
+  }
+
   /** 通知 WebView 宿主进入暂停状态。 */
   fun onHostPause() {
     ensureUsable()
@@ -208,6 +229,11 @@ class AndroidWebViewController(
       return
     }
 
+    // 先切换状态，保证扩展释放过程中不能再向即将销毁的 WebView 提交脚本。
+    isDisposed = true
+    extensions.filterIsInstance<WebViewControllerLifecycleExtension>().forEach { extension ->
+      extension.onControllerDisposed()
+    }
     activeFileChooserCallback?.onReceiveValue(null)
     activeFileChooserCallback = null
     view.stopLoading()
@@ -216,7 +242,6 @@ class AndroidWebViewController(
     view.removeAllViews()
     view.destroy()
     state = state.copy(isLoading = false)
-    isDisposed = true
   }
 
   private fun configureWebView(webView: WebView) {
