@@ -1,5 +1,6 @@
 package io.github.multiweb.extension
 
+import io.github.multiweb.api.JavaScriptExecutor
 import io.github.multiweb.api.WebError
 import io.github.multiweb.api.WebViewController
 
@@ -10,7 +11,7 @@ import io.github.multiweb.api.WebViewController
  * 以便业务方仅实现所需能力。平台不支持某项事件时不会回调，调用方应结合宿主需求提供降级方案。
  */
 interface WebViewExtension {
-  /** 需要注册到原生 WebView 的 JS 桥；桥只会在其 [ScriptBridge.allowedHosts] 中声明的受信任主机生效。 */
+  /** 需要注册到原生 WebView 的 JS 桥；平台按 [ScriptBridge.resolvedOriginPolicy] 限制可使用桥的页面。 */
   val scriptBridges: List<ScriptBridge>
     get() = emptyList()
 
@@ -106,18 +107,83 @@ sealed interface HostUiRequest {
 /**
  * 可暴露给受信任网页的 JS 桥。
  *
- * 平台实现必须先校验当前主文档主机名位于 [allowedHosts]，再向网页暴露该桥。桥名称和
+ * 平台实现必须按 [resolvedOriginPolicy] 校验当前主文档后再向网页暴露该桥。未实现
+ * [OriginPolicyAwareScriptBridge] 的桥保持 [allowedHosts] 精确 HTTPS 主机语义。桥名称和
  * [ScriptBridgeWithFacade] 的方法名应使用业务命名空间，避免与页面脚本冲突；禁止向未受信任页面暴露任意原生对象。
  */
 interface ScriptBridge {
   /** 页面脚本访问该桥时使用的全局名称。 */
   val name: String
 
-  /** 允许使用该桥的主机名集合，不能为空且不支持通配符；仅匹配 HTTPS 默认端口 443。 */
+  /**
+   * 允许使用桥的精确 HTTPS 主机名集合。
+   *
+   * 未实现 [OriginPolicyAwareScriptBridge] 时不能为空且不支持通配符；实现该接口后由
+   * [OriginPolicyAwareScriptBridge.originPolicy] 决定语义。
+   */
   val allowedHosts: Set<String>
 
   /** 处理来自网页的显式方法调用，并返回可序列化的响应；不需要响应时返回 `null`。 */
   fun handle(call: ScriptBridgeCall): ScriptBridgeResponse?
+}
+
+/**
+ * JS 桥允许接收网页消息的来源策略。
+ *
+ * 默认应使用 [ExactHttpsHosts]。只有迁移无法修改的旧网页时才可显式选择 [UnsafeAnyHttpOrHttps]；后者会将桥
+ * 暴露给任意 HTTP/HTTPS 主文档，不能用于令牌、账户、支付、路由等高权限业务。平台不支持在不放宽到其他来源的
+ * 前提下实现该策略时，必须拒绝安装，而不能静默放宽为全来源桥。
+ */
+sealed interface ScriptBridgeOriginPolicy {
+  /** 仅允许指定精确主机的 HTTPS 默认端口 443 页面使用桥。 */
+  data class ExactHttpsHosts(
+    /** 允许使用桥的精确 HTTPS 主机名集合；不能为空且不支持通配符。 */
+    val hosts: Set<String>,
+  ) : ScriptBridgeOriginPolicy
+
+  /**
+   * 不安全的旧页面兼容模式：仅允许主框架的 HTTP/HTTPS 页面使用桥。
+   *
+   * 该模式会接受任意主机和端口，调用方必须将桥方法限制为低权限、可验证的业务请求。并非所有平台都能在不把桥
+   * 暴露给 `file:`、`data:` 或子框架的前提下实现它；此类平台会在安装阶段明确拒绝。
+   */
+  data object UnsafeAnyHttpOrHttps : ScriptBridgeOriginPolicy
+}
+
+/**
+ * 可声明自定义来源策略的 JS 桥。
+ *
+ * 该子接口避免向已发布的 [ScriptBridge] 增加抽象成员。未实现时，平台将 [ScriptBridge.allowedHosts] 解释为
+ * [ScriptBridgeOriginPolicy.ExactHttpsHosts]，完全保持既有默认行为。
+ */
+interface OriginPolicyAwareScriptBridge : ScriptBridge {
+  /** 当前桥的来源策略；平台的桥注入、消息处理与脚本执行必须使用同一策略。 */
+  val originPolicy: ScriptBridgeOriginPolicy
+}
+
+/**
+ * 可按 [ScriptBridgeOriginPolicy] 提交脚本的控制器能力。
+ *
+ * 该子接口避免修改已发布的 [JavaScriptExecutor]。仅实现旧接口的控制器仍可执行精确 HTTPS 主机策略；无法安全实现
+ * [ScriptBridgeOriginPolicy.UnsafeAnyHttpOrHttps] 时必须返回 `false`。
+ */
+interface OriginPolicyAwareJavaScriptExecutor : JavaScriptExecutor {
+  /** 向符合 [originPolicy] 的当前主文档提交脚本；拒绝时返回 `false`。 */
+  fun executeJavaScript(
+    script: String,
+    originPolicy: ScriptBridgeOriginPolicy,
+  ): Boolean
+}
+
+/**
+ * 取得桥的有效来源策略。
+ *
+ * 未实现 [OriginPolicyAwareScriptBridge] 的既有桥保持精确 HTTPS 主机语义；平台实现应使用此函数而非直接读取
+ * [ScriptBridge.allowedHosts]，避免桥注入、消息回调和脚本执行出现策略分叉。
+ */
+fun ScriptBridge.resolvedOriginPolicy(): ScriptBridgeOriginPolicy {
+  return (this as? OriginPolicyAwareScriptBridge)?.originPolicy
+    ?: ScriptBridgeOriginPolicy.ExactHttpsHosts(allowedHosts)
 }
 
 /**

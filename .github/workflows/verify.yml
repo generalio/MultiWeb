@@ -36,7 +36,8 @@ jobs:
 
       - name: 校验公共 API 与各平台最低构建
         run: >-
-          ./gradlew apiCheck :webview-android:assembleRelease :webview-desktop:check
+          ./gradlew apiCheck :webview-android:assembleRelease :webview-android:compileDebugAndroidTestKotlin
+          :webview-desktop:check
           :sample-compose:linkDebugFrameworkIosSimulatorArm64 :sample-compose:compileKotlinJs
           :sample-compose:compileKotlinWasmJs
           --no-parallel -Dorg.gradle.jvmargs=-Xmx2g

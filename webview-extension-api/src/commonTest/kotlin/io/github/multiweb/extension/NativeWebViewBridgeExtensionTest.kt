@@ -6,6 +6,7 @@ import io.github.multiweb.api.WebViewController
 import io.github.multiweb.api.WebViewState
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFailsWith
 import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 
@@ -128,6 +129,67 @@ class NativeWebViewBridgeExtensionTest {
   }
 
   @Test
+  fun `不安全兼容模式会向策略感知执行器透传同一来源策略`() {
+    val extension = NativeWebViewBridgeExtension(
+      originPolicy = ScriptBridgeOriginPolicy.UnsafeAnyHttpOrHttps,
+      host = NativeWebViewBridgeHost { NativeWebViewBridgeResult.Success() },
+      enableLegacyJavaScriptExecution = true,
+    )
+    val executor = RecordingOriginPolicyAwareJavaScriptExecutor()
+    extension.onControllerAttached(executor)
+    val bridge = extension.scriptBridges.single()
+
+    assertEquals(emptySet<String>(), bridge.allowedHosts)
+    assertEquals(
+      ScriptBridgeOriginPolicy.UnsafeAnyHttpOrHttps,
+      requireNotNull(bridge as? OriginPolicyAwareScriptBridge).originPolicy,
+    )
+    assertTrue(requireNotNull(bridge.handle(ScriptBridgeCall("onLoad", "window.init()"))).isSuccess)
+    extension.onPageFinished(PageFinishedEvent("https://any.example/home"))
+    assertTrue(requireNotNull(bridge.handle(ScriptBridgeCall("exeJs", "window.refresh()"))).isSuccess)
+
+    assertEquals(
+      listOf<ScriptBridgeOriginPolicy>(
+        ScriptBridgeOriginPolicy.UnsafeAnyHttpOrHttps,
+        ScriptBridgeOriginPolicy.UnsafeAnyHttpOrHttps,
+      ),
+      executor.originPolicyCalls,
+    )
+    assertEquals(listOf("window.init()", "window.refresh()"), executor.scripts)
+  }
+
+  @Test
+  fun `策略构造器仅接受显式不安全兼容模式`() {
+    val exception = assertFailsWith<IllegalArgumentException> {
+      NativeWebViewBridgeExtension(
+        originPolicy = ScriptBridgeOriginPolicy.ExactHttpsHosts(setOf("app.example.com")),
+        host = NativeWebViewBridgeHost { NativeWebViewBridgeResult.Success() },
+      )
+    }
+
+    assertTrue(exception.message.orEmpty().contains("allowedHosts"))
+  }
+
+  @Test
+  fun `不安全兼容模式不会降级为旧脚本执行器`() {
+    val extension = NativeWebViewBridgeExtension(
+      originPolicy = ScriptBridgeOriginPolicy.UnsafeAnyHttpOrHttps,
+      host = NativeWebViewBridgeHost { NativeWebViewBridgeResult.Success() },
+      enableLegacyJavaScriptExecution = true,
+    )
+    val executor = RecordingJavaScriptExecutor()
+    extension.onControllerAttached(executor)
+
+    val response = requireNotNull(
+      extension.scriptBridges.single().handle(ScriptBridgeCall("exeJs", "window.refresh()")),
+    )
+
+    assertFalse(response.isSuccess)
+    assertEquals("javascript_execution_rejected", response.errorCode)
+    assertEquals(emptyList(), executor.scripts)
+  }
+
+  @Test
   fun `未绑定或被拒绝的受控脚本会返回稳定错误并在释放时清理状态`() {
     val extension = NativeWebViewBridgeExtension(
       allowedHosts = setOf("app.example.com"),
@@ -170,6 +232,37 @@ class NativeWebViewBridgeExtensionTest {
       }
       scripts += script
       allowedHostCalls += allowedHosts
+      return true
+    }
+
+    override fun load(request: WebRequest) = Unit
+
+    override fun reload() = Unit
+
+    override fun goBack() = Unit
+
+    override fun goForward() = Unit
+
+    override fun stopLoading() = Unit
+
+    override fun clearSession() = Unit
+
+    override fun dispose() = Unit
+  }
+
+  private class RecordingOriginPolicyAwareJavaScriptExecutor :
+    WebViewController,
+    OriginPolicyAwareJavaScriptExecutor {
+    val scripts = mutableListOf<String>()
+    val originPolicyCalls = mutableListOf<ScriptBridgeOriginPolicy>()
+
+    override val state: WebViewState = WebViewState()
+
+    override fun executeJavaScript(script: String, allowedHosts: Set<String>): Boolean = false
+
+    override fun executeJavaScript(script: String, originPolicy: ScriptBridgeOriginPolicy): Boolean {
+      scripts += script
+      originPolicyCalls += originPolicy
       return true
     }
 

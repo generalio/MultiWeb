@@ -101,19 +101,34 @@ sealed interface NativeWebViewBridgeResult {
 /**
  * 兼容旧 `window.AndroidWebView` 方法名的受限跨平台扩展。
  *
- * 所有方法只能通过 [allowedHosts] 中的精确 HTTPS 主机调用，并统一返回 Promise。该扩展只负责把网页调用
- * 转换为 [NativeWebViewBridgeRequest]；账号、路由、权限、下载与传感器均由 [host] 决定。默认情况下脚本执行也
- * 交由 [host] 处理；仅显式开启后才会由扩展使用 [JavaScriptExecutor] 受控执行。Promise 成功时返回的对象包含
+ * 默认所有方法只能通过精确 HTTPS 主机调用，并统一返回 Promise。该扩展只负责把网页调用转换为
+ * [NativeWebViewBridgeRequest]；账号、路由、权限、下载与传感器均由 [host] 决定。默认情况下脚本执行也交由
+ * [host] 处理；仅显式开启后才会由扩展使用 [JavaScriptExecutor] 受控执行。Promise 成功时返回的对象包含
  * `isSuccess` 与 [NativeWebViewBridgeResult.Success.payload] 对应的 `payload` 字段。
  */
-class NativeWebViewBridgeExtension(
-  /** 允许使用该桥的精确 HTTPS 主机名集合。 */
-  private val allowedHosts: Set<String>,
+class NativeWebViewBridgeExtension private constructor(
+  /** 桥注入、消息回调与受控脚本执行共用的来源策略。 */
+  private val originPolicy: ScriptBridgeOriginPolicy,
   /** 执行业务请求的应用宿主。 */
   private val host: NativeWebViewBridgeHost,
   /** 网页侧桥名称，默认兼容旧 Android 项目的 `AndroidWebView`。 */
-  private val bridgeName: String = "AndroidWebView",
+  private val bridgeName: String,
+  /** 是否启用由框架执行旧桥脚本；默认关闭以维持最小权限和既有宿主语义。 */
+  private val enableLegacyJavaScriptExecution: Boolean,
 ) : WebViewControllerLifecycleExtension {
+  /**
+   * 创建仅允许精确 HTTPS 主机使用的旧网页桥。
+   *
+   * 此构造器保留既有公开 API 与默认安全语义。
+   * [ScriptBridgeOriginPolicy.UnsafeAnyHttpOrHttps] 必须通过另一个显式命名的构造器选择。
+   */
+  constructor(
+    /** 允许使用该桥的精确 HTTPS 主机名集合。 */
+    allowedHosts: Set<String>,
+    host: NativeWebViewBridgeHost,
+    bridgeName: String = "AndroidWebView",
+  ) : this(ScriptBridgeOriginPolicy.ExactHttpsHosts(allowedHosts), host, bridgeName, false)
+
   /**
    * 创建启用受控旧脚本执行能力的桥。
    *
@@ -128,25 +143,44 @@ class NativeWebViewBridgeExtension(
     enableLegacyJavaScriptExecution: Boolean,
     bridgeName: String = "AndroidWebView",
   ) : this(
-    allowedHosts = allowedHosts,
-    host = host,
-    bridgeName = bridgeName,
-  ) {
-    this.enableLegacyJavaScriptExecution = enableLegacyJavaScriptExecution
-  }
+    ScriptBridgeOriginPolicy.ExactHttpsHosts(allowedHosts),
+    host,
+    bridgeName,
+    enableLegacyJavaScriptExecution,
+  )
 
-  /** 是否启用由框架执行旧桥脚本；默认关闭以维持最小权限和既有宿主语义。 */
-  private var enableLegacyJavaScriptExecution: Boolean = false
+  /**
+   * 创建允许旧页面在任意 HTTP/HTTPS 主文档调用桥的高风险兼容模式。
+   *
+   * 该构造器只能显式传入 [ScriptBridgeOriginPolicy.UnsafeAnyHttpOrHttps]。不支持在保持 `file:`、`data:` 与子框架
+   * 隔离的前提下实现该策略的平台会拒绝安装桥；调用方应改用精确 HTTPS 主机，不得通过其他桥机制绕过此限制。
+   */
+  constructor(
+    originPolicy: ScriptBridgeOriginPolicy,
+    host: NativeWebViewBridgeHost,
+    enableLegacyJavaScriptExecution: Boolean = false,
+    bridgeName: String = "AndroidWebView",
+  ) : this(
+    requireUnsafeAnyHttpOrHttps(originPolicy),
+    host,
+    bridgeName,
+    enableLegacyJavaScriptExecution,
+  )
+
   /** 生命周期绑定的脚本执行器；控制器释放后必须清空。 */
   private var javaScriptExecutor: JavaScriptExecutor? = null
   /** 网页最后声明的页面完成脚本；新值会覆盖旧值，并在下一次页面完成回调后清空。 */
   private var pageLoadScript: String? = null
 
   override val scriptBridges: List<ScriptBridge> = listOf(
-    object : ScriptBridgeWithFacade {
+    object : ScriptBridgeWithFacade, OriginPolicyAwareScriptBridge {
       override val name: String = bridgeName
       override val transportName: String = "__multiweb_${bridgeName}_transport"
-      override val allowedHosts: Set<String> = this@NativeWebViewBridgeExtension.allowedHosts
+      override val allowedHosts: Set<String> = when (val policy = this@NativeWebViewBridgeExtension.originPolicy) {
+        is ScriptBridgeOriginPolicy.ExactHttpsHosts -> policy.hosts
+        ScriptBridgeOriginPolicy.UnsafeAnyHttpOrHttps -> emptySet()
+      }
+      override val originPolicy: ScriptBridgeOriginPolicy = this@NativeWebViewBridgeExtension.originPolicy
       override val facade: ScriptBridgeFacade = ScriptBridgeFacade(LegacyMethodNames)
 
       override fun handle(call: ScriptBridgeCall): ScriptBridgeResponse {
@@ -171,7 +205,7 @@ class NativeWebViewBridgeExtension(
     val script = pageLoadScript ?: return
     // 页面完成事件可能重复派发；先清空保证同一份旧页面脚本至多提交一次。
     pageLoadScript = null
-    javaScriptExecutor?.executeJavaScript(script, allowedHosts)
+    javaScriptExecutor?.executeJavaScript(script, originPolicy)
   }
 
   private fun handleCall(call: ScriptBridgeCall): ScriptBridgeResponse {
@@ -212,10 +246,25 @@ class NativeWebViewBridgeExtension(
   private fun executeJavaScript(script: String): ScriptBridgeResponse {
     val executor = javaScriptExecutor
       ?: return ScriptBridgeResponse(isSuccess = false, errorCode = JavaScriptExecutorUnavailable)
-    return if (executor.executeJavaScript(script, allowedHosts)) {
+    return if (executor.executeJavaScript(script, originPolicy)) {
       ScriptBridgeResponse(isSuccess = true)
     } else {
       ScriptBridgeResponse(isSuccess = false, errorCode = JavaScriptExecutionRejected)
+    }
+  }
+
+  /** 优先使用策略感知执行器；旧执行器只允许维持既有精确 HTTPS 主机语义。 */
+  private fun JavaScriptExecutor.executeJavaScript(
+    script: String,
+    originPolicy: ScriptBridgeOriginPolicy,
+  ): Boolean {
+    val policyAwareExecutor = this as? OriginPolicyAwareJavaScriptExecutor
+    if (policyAwareExecutor != null) {
+      return policyAwareExecutor.executeJavaScript(script, originPolicy)
+    }
+    return when (originPolicy) {
+      is ScriptBridgeOriginPolicy.ExactHttpsHosts -> executeJavaScript(script, originPolicy.hosts)
+      ScriptBridgeOriginPolicy.UnsafeAnyHttpOrHttps -> false
     }
   }
 
@@ -237,6 +286,14 @@ class NativeWebViewBridgeExtension(
   }
 
   private companion object {
+    /** 避免通用策略构造器被误用为精确主机配置；后者必须使用保留的 [allowedHosts] 构造器。 */
+    fun requireUnsafeAnyHttpOrHttps(originPolicy: ScriptBridgeOriginPolicy): ScriptBridgeOriginPolicy {
+      require(originPolicy is ScriptBridgeOriginPolicy.UnsafeAnyHttpOrHttps) {
+        "精确 HTTPS 主机请使用 allowedHosts 构造器；此构造器仅支持 UnsafeAnyHttpOrHttps。"
+      }
+      return originPolicy
+    }
+
     /** 控制器未实现脚本执行器或已释放时返回的稳定错误码。 */
     val JavaScriptExecutorUnavailable = "javascript_executor_unavailable"
     /** 原生侧因来源、线程或平台状态拒绝脚本时返回的稳定错误码。 */

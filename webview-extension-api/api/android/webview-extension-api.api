@@ -31,6 +31,8 @@ public final class io/github/multiweb/extension/HostUiRequest$SetFullscreen : io
 }
 
 public final class io/github/multiweb/extension/NativeWebViewBridgeExtension : io/github/multiweb/extension/WebViewControllerLifecycleExtension {
+	public fun <init> (Lio/github/multiweb/extension/ScriptBridgeOriginPolicy;Lio/github/multiweb/extension/NativeWebViewBridgeHost;ZLjava/lang/String;)V
+	public synthetic fun <init> (Lio/github/multiweb/extension/ScriptBridgeOriginPolicy;Lio/github/multiweb/extension/NativeWebViewBridgeHost;ZLjava/lang/String;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
 	public fun <init> (Ljava/util/Set;Lio/github/multiweb/extension/NativeWebViewBridgeHost;Ljava/lang/String;)V
 	public synthetic fun <init> (Ljava/util/Set;Lio/github/multiweb/extension/NativeWebViewBridgeHost;Ljava/lang/String;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
 	public fun <init> (Ljava/util/Set;Lio/github/multiweb/extension/NativeWebViewBridgeHost;ZLjava/lang/String;)V
@@ -188,6 +190,14 @@ public final class io/github/multiweb/extension/NativeWebViewBridgeResult$Succes
 	public fun toString ()Ljava/lang/String;
 }
 
+public abstract interface class io/github/multiweb/extension/OriginPolicyAwareJavaScriptExecutor : io/github/multiweb/api/JavaScriptExecutor {
+	public abstract fun executeJavaScript (Ljava/lang/String;Lio/github/multiweb/extension/ScriptBridgeOriginPolicy;)Z
+}
+
+public abstract interface class io/github/multiweb/extension/OriginPolicyAwareScriptBridge : io/github/multiweb/extension/ScriptBridge {
+	public abstract fun getOriginPolicy ()Lio/github/multiweb/extension/ScriptBridgeOriginPolicy;
+}
+
 public final class io/github/multiweb/extension/PageErrorEvent {
 	public fun <init> (Lio/github/multiweb/api/WebError;)V
 	public final fun component1 ()Lio/github/multiweb/api/WebError;
@@ -251,6 +261,27 @@ public final class io/github/multiweb/extension/ScriptBridgeFacade {
 	public static synthetic fun copy$default (Lio/github/multiweb/extension/ScriptBridgeFacade;Ljava/util/Set;ILjava/lang/Object;)Lio/github/multiweb/extension/ScriptBridgeFacade;
 	public fun equals (Ljava/lang/Object;)Z
 	public final fun getMethodNames ()Ljava/util/Set;
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public abstract interface class io/github/multiweb/extension/ScriptBridgeOriginPolicy {
+}
+
+public final class io/github/multiweb/extension/ScriptBridgeOriginPolicy$ExactHttpsHosts : io/github/multiweb/extension/ScriptBridgeOriginPolicy {
+	public fun <init> (Ljava/util/Set;)V
+	public final fun component1 ()Ljava/util/Set;
+	public final fun copy (Ljava/util/Set;)Lio/github/multiweb/extension/ScriptBridgeOriginPolicy$ExactHttpsHosts;
+	public static synthetic fun copy$default (Lio/github/multiweb/extension/ScriptBridgeOriginPolicy$ExactHttpsHosts;Ljava/util/Set;ILjava/lang/Object;)Lio/github/multiweb/extension/ScriptBridgeOriginPolicy$ExactHttpsHosts;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getHosts ()Ljava/util/Set;
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class io/github/multiweb/extension/ScriptBridgeOriginPolicy$UnsafeAnyHttpOrHttps : io/github/multiweb/extension/ScriptBridgeOriginPolicy {
+	public static final field INSTANCE Lio/github/multiweb/extension/ScriptBridgeOriginPolicy$UnsafeAnyHttpOrHttps;
+	public fun equals (Ljava/lang/Object;)Z
 	public fun hashCode ()I
 	public fun toString ()Ljava/lang/String;
 }
@@ -398,6 +429,10 @@ public final class io/github/multiweb/extension/WebViewExtension$DefaultImpls {
 	public static fun onPageError (Lio/github/multiweb/extension/WebViewExtension;Lio/github/multiweb/extension/PageErrorEvent;)V
 	public static fun onPageFinished (Lio/github/multiweb/extension/WebViewExtension;Lio/github/multiweb/extension/PageFinishedEvent;)V
 	public static fun onPageStarted (Lio/github/multiweb/extension/WebViewExtension;Lio/github/multiweb/extension/PageStartedEvent;)V
+}
+
+public final class io/github/multiweb/extension/WebViewExtensionKt {
+	public static final fun resolvedOriginPolicy (Lio/github/multiweb/extension/ScriptBridge;)Lio/github/multiweb/extension/ScriptBridgeOriginPolicy;
 }
 
 public final class io/github/multiweb/extension/WebViewInitialization {

@@ -3,8 +3,10 @@ package io.github.multiweb.ios
 import io.github.multiweb.extension.ScriptBridge
 import io.github.multiweb.extension.ScriptBridgeCall
 import io.github.multiweb.extension.ScriptBridgeFacade
+import io.github.multiweb.extension.ScriptBridgeOriginPolicy
 import io.github.multiweb.extension.ScriptBridgeResponse
 import io.github.multiweb.extension.ScriptBridgeWithFacade
+import io.github.multiweb.extension.resolvedOriginPolicy
 import kotlinx.cinterop.ExperimentalForeignApi
 import platform.Foundation.NSURL
 import platform.WebKit.WKScriptMessage
@@ -20,7 +22,7 @@ import platform.darwin.NSObject
  *
  * 普通消息桥维持单向 `postMessage` 行为。声明了 [io.github.multiweb.extension.ScriptBridgeWithFacade.facade] 的桥会在
  * document-start 脚本中安装 Promise 门面，原生处理完成后通过当前受信任主文档回传
- * [ScriptBridgeResponse]。两条路径均在脚本和原生消息入口校验 HTTPS 精确主机名。
+ * [ScriptBridgeResponse]。两条路径均按同一来源策略校验；不安全兼容模式仍只允许 HTTP/HTTPS 主框架页面。
  */
 @OptIn(ExperimentalForeignApi::class)
 internal object IosScriptBridgeInstaller {
@@ -74,13 +76,16 @@ internal class IosScriptBridgeInstallation(
   }
 }
 
-/** 经过精确来源校验后才可注册的 iOS JS 桥配置。 */
+/** 经过来源策略校验后才可注册的 iOS JS 桥配置。 */
 @OptIn(ExperimentalForeignApi::class)
 internal data class IosScriptBridgeConfiguration(
   val bridge: ScriptBridge,
   val transportName: String,
   /** 网页公开的受限方法门面；未声明时只暴露消息通道。 */
   val facade: ScriptBridgeFacade?,
+  /** 桥注入、消息回调和受控脚本执行共用的来源策略。 */
+  val originPolicy: ScriptBridgeOriginPolicy,
+  /** 精确 HTTPS 策略规范化后的主机名；不安全兼容策略时为空。 */
   val allowedHosts: Set<String>,
 ) {
   /** Promise 门面在网页侧等待原生回包时使用的全局回调名称。 */
@@ -88,12 +93,21 @@ internal data class IosScriptBridgeConfiguration(
 
   /** 判断 WKWebView 当前主文档是否仍属于当前桥的受信任来源。 */
   fun isAllowedUrl(url: String): Boolean {
-    return isTrustedJavaScriptUrl(url, allowedHosts)
+    return isTrustedJavaScriptUrl(url, originPolicy)
   }
 
   fun injectionScript(): String {
-    val hostCheck = allowedHosts.joinToString(" || ") { host ->
-      "window.location.hostname === ${host.toJavaScriptString()}"
+    val originCheck = when (val policy = originPolicy) {
+      is ScriptBridgeOriginPolicy.ExactHttpsHosts -> {
+        val hostCheck = allowedHosts.joinToString(" || ") { host ->
+          "window.location.hostname === ${host.toJavaScriptString()}"
+        }
+        "window.location.protocol === 'https:' && " +
+          "(window.location.port === '' || window.location.port === '443') && ($hostCheck)"
+      }
+      ScriptBridgeOriginPolicy.UnsafeAnyHttpOrHttps -> {
+        "window.top === window && (window.location.protocol === 'http:' || window.location.protocol === 'https:')"
+      }
     }
     val bridgeFacade = facade
     val facadeMethods = bridgeFacade?.methodNames?.joinToString(",") { method ->
@@ -180,7 +194,7 @@ internal data class IosScriptBridgeConfiguration(
     }
     return """
       (function() {
-        if (window.location.protocol !== 'https:' || (window.location.port !== '' && window.location.port !== '443') || !($hostCheck)) return;
+        if (!($originCheck)) return;
         var handler = window.webkit && window.webkit.messageHandlers && window.webkit.messageHandlers[${transportName.toJavaScriptString()}];
         if (!handler) return;
         try {
@@ -232,17 +246,31 @@ internal data class IosScriptBridgeConfiguration(
             }
           }
         }
-        require(bridge.allowedHosts.isNotEmpty()) {
-          "JS 桥必须声明至少一个受信任主机：${bridge.name}"
-        }
-
-        val allowedHosts = bridge.allowedHosts.mapTo(linkedSetOf()) { host ->
-          require(isValidHost(host)) {
-            "JS 桥只允许精确 ASCII 主机名且不支持通配符：$host"
+        val originPolicy = bridge.resolvedOriginPolicy()
+        val allowedHosts = when (originPolicy) {
+          is ScriptBridgeOriginPolicy.ExactHttpsHosts -> {
+            require(originPolicy.hosts.isNotEmpty()) {
+              "JS 桥必须声明至少一个受信任主机：${bridge.name}"
+            }
+            originPolicy.hosts.mapTo(linkedSetOf()) { host ->
+              require(isValidHost(host)) {
+                "JS 桥只允许精确 ASCII 主机名且不支持通配符：$host"
+              }
+              host.lowercase()
+            }
           }
-          host.lowercase()
+          ScriptBridgeOriginPolicy.UnsafeAnyHttpOrHttps -> emptySet()
         }
-        IosScriptBridgeConfiguration(bridge, transportName, facade, allowedHosts)
+        IosScriptBridgeConfiguration(
+          bridge = bridge,
+          transportName = transportName,
+          facade = facade,
+          originPolicy = when (originPolicy) {
+            is ScriptBridgeOriginPolicy.ExactHttpsHosts -> ScriptBridgeOriginPolicy.ExactHttpsHosts(allowedHosts)
+            ScriptBridgeOriginPolicy.UnsafeAnyHttpOrHttps -> ScriptBridgeOriginPolicy.UnsafeAnyHttpOrHttps
+          },
+          allowedHosts = allowedHosts,
+        )
       }
     }
 
@@ -262,18 +290,37 @@ internal data class IosScriptBridgeConfiguration(
 /**
  * 复核脚本操作的当前主文档来源。
  *
- * 规则与 WKWebView 桥注入和消息回传保持一致：仅允许 HTTPS、精确主机及默认端口 443。该函数同时供消息桥和
- * [io.github.multiweb.api.JavaScriptExecutor] 使用，避免两条执行路径的安全边界不一致。
+ * 规则与 WKWebView 桥注入和消息回传保持一致。精确策略仅允许 HTTPS 默认端口 443；不安全兼容策略仅允许
+ * 具有主机名的 HTTP/HTTPS 页面。该函数同时供消息桥和 [io.github.multiweb.api.JavaScriptExecutor] 使用，避免
+ * 两条执行路径的安全边界不一致。
  */
 @OptIn(ExperimentalForeignApi::class)
 internal fun isTrustedJavaScriptUrl(url: String?, allowedHosts: Set<String>): Boolean {
-  if (url == null || allowedHosts.isEmpty()) {
+  return isTrustedJavaScriptUrl(url, ScriptBridgeOriginPolicy.ExactHttpsHosts(allowedHosts))
+}
+
+/** 按策略复核 WKWebView 当前主文档 URL；不安全模式仍拒绝本地与自定义 Scheme。 */
+@OptIn(ExperimentalForeignApi::class)
+internal fun isTrustedJavaScriptUrl(
+  url: String?,
+  originPolicy: ScriptBridgeOriginPolicy,
+): Boolean {
+  if (url == null) {
     return false
   }
   val parsed = NSURL(string = url)
-  return parsed.scheme?.lowercase() == "https" &&
-    parsed.host?.lowercase() in allowedHosts.mapTo(hashSetOf()) { it.lowercase() } &&
-    (parsed.port?.intValue ?: 443) == 443
+  val scheme = parsed.scheme?.lowercase()
+  val host = parsed.host?.lowercase()
+  return when (originPolicy) {
+    is ScriptBridgeOriginPolicy.ExactHttpsHosts -> {
+      scheme == "https" &&
+        host in originPolicy.hosts.mapTo(hashSetOf()) { it.lowercase() } &&
+        (parsed.port?.intValue ?: 443) == 443
+    }
+    ScriptBridgeOriginPolicy.UnsafeAnyHttpOrHttps -> {
+      scheme in setOf("http", "https") && !host.isNullOrBlank()
+    }
+  }
 }
 
 /** 在原生侧复核来源并分发网页命令，不能仅依赖注入脚本的前置判断。 */
@@ -302,10 +349,7 @@ internal class IosScriptBridgeMessageHandler(
   ) {
     val frameInfo = didReceiveScriptMessage.frameInfo
     val origin = frameInfo.securityOrigin
-    if (
-      !frameInfo.mainFrame || origin.protocol != "https" || origin.port != 443L ||
-      origin.host.lowercase() !in configuration.allowedHosts
-    ) {
+    if (!frameInfo.mainFrame || !configuration.isAllowedOrigin(origin.protocol, origin.host, origin.port)) {
       return
     }
 
@@ -320,6 +364,25 @@ internal class IosScriptBridgeMessageHandler(
       .getOrElse { ScriptBridgeResponse(isSuccess = false, errorCode = "bridge_exception") }
       ?: ScriptBridgeResponse(isSuccess = true)
     parsedCall.id?.let { callId -> reply(callId, response) }
+  }
+
+  /** 依据当前配置在原生消息入口复核协议、主机与端口，不能只依赖注入脚本。 */
+  private fun IosScriptBridgeConfiguration.isAllowedOrigin(
+    protocol: String,
+    host: String,
+    port: Long,
+  ): Boolean {
+    return when (val policy = originPolicy) {
+      is ScriptBridgeOriginPolicy.ExactHttpsHosts -> {
+        protocol.equals("https", ignoreCase = true) &&
+          port == 443L &&
+          host.lowercase() in policy.hosts
+      }
+      ScriptBridgeOriginPolicy.UnsafeAnyHttpOrHttps -> {
+        host.isNotBlank() &&
+          (protocol.equals("http", ignoreCase = true) || protocol.equals("https", ignoreCase = true))
+      }
+    }
   }
 
   private fun String.toScriptBridgeCall(): ParsedScriptBridgeCall? {

@@ -12,9 +12,11 @@ import io.github.multiweb.api.WebViewController
 import io.github.multiweb.api.WebViewState
 import io.github.multiweb.api.WebViewStateObservable
 import io.github.multiweb.extension.DownloadRequest
+import io.github.multiweb.extension.OriginPolicyAwareJavaScriptExecutor
 import io.github.multiweb.extension.PageErrorEvent
 import io.github.multiweb.extension.PageFinishedEvent
 import io.github.multiweb.extension.PageStartedEvent
+import io.github.multiweb.extension.ScriptBridgeOriginPolicy
 import io.github.multiweb.extension.WebContextAction
 import io.github.multiweb.extension.WebFileChooserHandler
 import io.github.multiweb.extension.WebFileChooserMode
@@ -77,7 +79,7 @@ class DesktopWebViewController(
   private val onBrowserClosed: () -> Unit = {},
   /** 可选的平台能力扩展；事件按列表顺序派发。 */
   private val extensions: List<WebViewExtension> = emptyList(),
-) : WebViewController, WebViewStateObservable, JavaScriptExecutor {
+) : WebViewController, WebViewStateObservable, JavaScriptExecutor, OriginPolicyAwareJavaScriptExecutor {
   /**
    * 使用跨平台初始化对象创建桌面控制器。
    *
@@ -226,11 +228,19 @@ class DesktopWebViewController(
    * JCEF 只能在 EDT 且浏览器创建完成后安全执行脚本；来源不可信、控制器已释放或页面尚未就绪时直接拒绝。
    */
   override fun executeJavaScript(script: String, allowedHosts: Set<String>): Boolean {
+    return executeJavaScript(script, ScriptBridgeOriginPolicy.ExactHttpsHosts(allowedHosts))
+  }
+
+  /** 按桥来源策略向当前主文档提交脚本；不安全模式仍只接受 HTTP/HTTPS 主文档。 */
+  override fun executeJavaScript(
+    script: String,
+    originPolicy: ScriptBridgeOriginPolicy,
+  ): Boolean {
     if (!SwingUtilities.isEventDispatchThread() || isDisposed || !isBrowserReady) {
       return false
     }
     val mainFrame = browser.mainFrame ?: return false
-    if (!isTrustedJavaScriptUrl(mainFrame.url, allowedHosts)) {
+    if (!isTrustedJavaScriptUrl(mainFrame.url, originPolicy)) {
       return false
     }
     mainFrame.executeJavaScript(script, "multiweb://executor", 0)
