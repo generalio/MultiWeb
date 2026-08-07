@@ -35,6 +35,7 @@ object DesktopWebViewRuntime {
     onBrowserClosed: () -> Unit = {},
   ) {
     synchronized(this) {
+      enableMacosInteropBlendingByDefault()
       check(configuration == null) {
         "DesktopWebViewRuntime 已初始化；同一进程只能注入一个 CefApp。"
       }
@@ -48,6 +49,21 @@ object DesktopWebViewRuntime {
         "Desktop WebView 使用前必须先调用 DesktopWebViewRuntime.initialize(cefApp)。"
       }
     }
+  }
+}
+
+/**
+ * macOS 的 JCEF windowed 浏览器属于原生窗口层；Compose 默认绘制层可能遮蔽它。
+ *
+ * Compose 通过该属性启用官方 Swing 互操作混合层。仅在调用方未显式配置该属性时提供 Desktop WebView 的
+ * 安全默认值，避免覆盖宿主已有的全局 Compose 配置。
+ */
+private fun enableMacosInteropBlendingByDefault() {
+  if (
+    System.getProperty("os.name").startsWith("Mac") &&
+    System.getProperty("compose.interop.blending") == null
+  ) {
+    System.setProperty("compose.interop.blending", "true")
   }
 }
 

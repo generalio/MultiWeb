@@ -1,5 +1,6 @@
 package io.github.multiweb.compose
 
+import android.view.ViewGroup
 import androidx.activity.ComponentActivity
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.SideEffect
@@ -50,6 +51,8 @@ class ComposeWebViewAndroidLifecycleTest {
 
     val firstController = controllers.single() as AndroidWebViewController
     assertNotNull(firstController.view.parent)
+    assertEquals(ViewGroup.LayoutParams.MATCH_PARENT, firstController.view.layoutParams.width)
+    assertEquals(ViewGroup.LayoutParams.MATCH_PARENT, firstController.view.layoutParams.height)
 
     composeRule.runOnIdle {
       lifecycleOwner = TestLifecycleOwner()

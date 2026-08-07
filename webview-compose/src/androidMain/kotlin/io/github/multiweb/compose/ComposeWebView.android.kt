@@ -1,5 +1,6 @@
 package io.github.multiweb.compose
 
+import android.view.ViewGroup
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.getValue
@@ -67,7 +68,14 @@ actual fun WebView(
     ?: error("WebView 必须接收 rememberWebViewController 创建的 Android 控制器。")
   key(controller) {
     AndroidView(
-      factory = { androidController.view },
+      factory = {
+        androidController.view.apply {
+          layoutParams = ViewGroup.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT,
+            ViewGroup.LayoutParams.MATCH_PARENT,
+          )
+        }
+      },
       modifier = modifier,
     )
   }

@@ -121,6 +121,8 @@ class DesktopWebViewController(
 
   /** 供宿主添加到 Swing/AWT 视图层级的 JCEF 原生组件。 */
   val view: Component
+  /** 等待 JCEF 与 Swing 均就绪后同步 windowed 原生浏览器的首次布局。 */
+  private lateinit var initialNativeViewLayoutCoordinator: DesktopInitialNativeViewLayoutCoordinator
 
   /** 控制器是否已释放。释放后除 [dispose] 外的操作都会抛出 [IllegalStateException]。 */
   @Volatile
@@ -165,7 +167,11 @@ class DesktopWebViewController(
     )
     browser = client.createBrowser("about:blank", false, false)
     view = browser.uiComponent
-    // Compose 的 SwingPanel 不保证触发 JCEF 所需的首次 Swing 绘制；主动创建可避免原生视图保持空白。
+    initialNativeViewLayoutCoordinator = DesktopInitialNativeViewLayoutCoordinator(
+      target = ComponentDesktopNativeViewLayoutTarget(view),
+      isControllerDisposed = { isDisposed },
+    )
+    initialNativeViewLayoutCoordinator.registerShowingListener()
     browser.createImmediately()
     extensions.filterIsInstance<WebViewControllerLifecycleExtension>().forEach { extension ->
       extension.onControllerAttached(this)
@@ -254,6 +260,7 @@ class DesktopWebViewController(
     }
 
     isDisposed = true
+    initialNativeViewLayoutCoordinator.dispose()
     extensions.filterIsInstance<WebViewControllerLifecycleExtension>().forEach { extension ->
       extension.onControllerDisposed()
     }
@@ -263,9 +270,19 @@ class DesktopWebViewController(
     activeFileChoosers.forEach(DesktopFileChooserCallbackGuard::cancel)
     activeFileChoosers.clear()
     scriptBridgeInstallation.dispose()
-    browser.stopLoad()
-    browser.close(true)
+    closeBrowser()
     state = state.copy(isLoading = false)
+  }
+
+  /**
+   * 按 JCEF 的正常关闭路径释放当前浏览器。
+   *
+   * macOS 的 windowed JCEF 会在关闭过程中移除 AppKit 事件监听。`close(true)` 会跳过浏览器的
+   * 关闭协商，可能与 Compose/AWT 正在处理的事件竞争；先显式允许关闭，再以非强制方式关闭，最终仍由
+   * [CefLifeSpanHandlerAdapter.onBeforeClose] 释放 Client。
+   */
+  private fun closeBrowser() {
+    closeDesktopBrowser(browser)
   }
 
   private fun configureClient(client: CefClient) {
@@ -314,10 +331,11 @@ class DesktopWebViewController(
             return@invokeLater
           }
           if (isDisposed) {
-            createdBrowser.close(true)
+            closeBrowser()
             return@invokeLater
           }
           isBrowserReady = true
+          initialNativeViewLayoutCoordinator.requestInitialNativeViewLayout()
           pendingInitialRequest?.let { request ->
             pendingInitialRequest = null
             loadBrowserRequest(request)
@@ -740,4 +758,11 @@ class DesktopWebViewController(
       "DesktopWebViewController 必须在 Swing EDT 中调用。"
     }
   }
+}
+
+/** 统一执行 JCEF 的非强制浏览器关闭顺序，供桌面控制器及回归测试复用。 */
+internal fun closeDesktopBrowser(browser: CefBrowser) {
+  browser.stopLoad()
+  browser.setCloseAllowed()
+  browser.close(false)
 }
