@@ -5,7 +5,6 @@ import android.net.Uri
 import android.net.http.SslError
 import android.os.Build
 import android.os.Looper
-import android.view.View
 import android.webkit.CookieManager
 import android.webkit.RenderProcessGoneDetail
 import android.webkit.SslErrorHandler
@@ -99,6 +98,8 @@ class AndroidWebViewController(
   private val compatibilitySettings = extensions
     .singleAndroidWebViewCompatibilityExtension()
     ?.toAndroidWebViewCompatibilitySettings()
+  /** 图层策略缺失时保持系统默认，避免影响 WebGL 与 Canvas 的硬件渲染路径。 */
+  private val layerPolicy = extensions.singleAndroidWebViewLayerExtension()?.layerPolicy
 
   /**
    * 供宿主添加到界面层级的原生 WebView。
@@ -273,9 +274,9 @@ class AndroidWebViewController(
   }
 
   private fun configureWebView(webView: WebView) {
-    // 部分厂商 WebView 在 Compose AndroidView 中使用硬件层时会忽略宿主偏移，覆盖整个窗口。
-    // 使用软件层保证其绘制边界始终遵循 Compose 测量结果，避免页面与宿主控件错位。
-    webView.setLayerType(View.LAYER_TYPE_SOFTWARE, null)
+    layerPolicy?.toPlatformLayerTypeOrNull()?.let { layerType ->
+      webView.setLayerType(layerType, null)
+    }
     val settings = config.toAndroidWebViewSettings()
     with(webView.settings) {
       javaScriptEnabled = settings.javaScriptEnabled
