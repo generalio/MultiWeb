@@ -6,9 +6,12 @@ public final class io/github/multiweb/compose/ComposeWebView_desktopKt {
 public final class io/github/multiweb/compose/DesktopWebViewRuntime {
 	public static final field $stable I
 	public static final field INSTANCE Lio/github/multiweb/compose/DesktopWebViewRuntime;
+	public final fun bindApplicationExit (Lkotlin/jvm/functions/Function0;)V
+	public final fun createMacOsTerminationHandler ()Lme/friwi/jcefmaven/MavenCefAppHandlerAdapter;
 	public final fun initialize (Lorg/cef/CefApp;Lkotlin/jvm/functions/Function0;)V
 	public static synthetic fun initialize$default (Lio/github/multiweb/compose/DesktopWebViewRuntime;Lorg/cef/CefApp;Lkotlin/jvm/functions/Function0;ILjava/lang/Object;)V
 	public final fun prepareComposeInterop ()V
+	public final fun requestApplicationExit ()V
 }
 
 public final class io/github/multiweb/compose/WebViewHostCallbacks {

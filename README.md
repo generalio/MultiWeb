@@ -65,18 +65,29 @@ fun HelpPage() {
 }
 ```
 
-Desktop 在首次组合上述页面前，还需要由应用入口创建一次 JCEF 并注入运行时。`CefApp` 是进程级资源，
-MultiWeb 不会替宿主销毁它：
+Desktop Compose 还需要在应用入口初始化一次进程级 JCEF。macOS 的 windowed JCEF 推荐使用受控退出入口：它会先
+关闭所有 Compose WebView，确认 CEF 已终止后再退出 Compose，避免 Cmd+Q 与原生清理竞争：
 
 ```kotlin
-val cefApp = CefAppBuilder().build()
+fun main() {
+  DesktopWebViewRuntime.prepareComposeInterop()
 
-DesktopWebViewRuntime.initialize(
-  cefApp = cefApp,
-  onBrowserClosed = {
-    // 确认没有其他浏览器后，由宿主调用 cefApp.dispose()。
-  },
-)
+  val cefApp = CefAppBuilder().apply {
+    setAppHandler(DesktopWebViewRuntime.createMacOsTerminationHandler())
+  }.build()
+
+  DesktopWebViewRuntime.initialize(cefApp)
+
+  application {
+    DesktopWebViewRuntime.bindApplicationExit(::exitApplication)
+
+    Window(
+      onCloseRequest = DesktopWebViewRuntime::requestApplicationExit,
+    ) {
+      // Compose 内容
+    }
+  }
+}
 ```
 
 完整的依赖、初始化与各平台接入方式见[使用指南](docs/使用指南.md)。
