@@ -9,7 +9,6 @@ import androidx.compose.ui.window.WindowPlacement
 import androidx.compose.ui.window.application
 import androidx.compose.ui.window.rememberWindowState
 import io.github.multiweb.compose.DesktopWebViewRuntime
-import io.github.multiweb.api.WebViewController
 import io.github.multiweb.extension.HostUiRequest
 import io.github.multiweb.sample.SampleWebViewApp
 import io.github.multiweb.sample.SampleWebViewExtension
@@ -84,19 +83,14 @@ private fun runDesktopSampleApplication() = application {
       // JCEF 原生运行时体积较大，放入用户目录以便多次启动复用，避免污染项目工作区。
       setInstallDir(jcefInstallDirectory())
       configureCefUserDataDirectory()
+      setAppHandler(DesktopWebViewRuntime.createMacOsTerminationHandler())
     }.build()
   }
   remember(cefApp) {
-    DesktopWebViewRuntime.initialize(
-      cefApp = cefApp,
-      onBrowserClosed = {
-        // JCEF 在原生关闭回调后才允许销毁进程级 CefApp，随后再结束 Compose 事件循环。
-        SwingUtilities.invokeLater {
-          cefApp.dispose()
-          exitApplication()
-        }
-      },
-    )
+    DesktopWebViewRuntime.initialize(cefApp)
+  }
+  remember {
+    DesktopWebViewRuntime.bindApplicationExit(::exitApplication)
   }
   val initialization = remember(extension, nativeBridgeExtension) {
     sampleWebViewInitialization(
@@ -110,11 +104,9 @@ private fun runDesktopSampleApplication() = application {
       )
     }
   }
-  var controller by remember { mutableStateOf<WebViewController?>(null) }
-
   Window(
-    // 不直接退出 Compose；先等待 JCEF 确认浏览器关闭，避免 macOS AppKit 访问已释放的原生对象。
-    onCloseRequest = { controller?.dispose() },
+    // 不直接退出 Compose；先等待 JCEF 确认浏览器关闭和进程终止，避免 macOS AppKit 访问已释放的原生对象。
+    onCloseRequest = DesktopWebViewRuntime::requestApplicationExit,
     state = windowState,
     title = "MultiWeb Compose 示例",
   ) {
@@ -130,7 +122,7 @@ private fun runDesktopSampleApplication() = application {
         }
       },
       onImageSaveDismissed = { pendingImageSaveUrl = null },
-      onWebViewControllerReady = { controller = it },
+      onWebViewControllerReady = {},
     )
   }
 }
