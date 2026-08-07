@@ -25,6 +25,20 @@ object DesktopWebViewRuntime {
   private var configuration: DesktopWebViewRuntimeConfiguration? = null
 
   /**
+   * 在启动 Compose Desktop 应用前准备 macOS 的 Swing 互操作配置。
+   *
+   * windowed JCEF 依赖 Compose 的原生 Swing 混合层；使用 macOS 时，应在 `application {}` 或其他 Compose 应用入口
+   * 之前调用。宿主已显式设置 `compose.interop.blending` 时保持其选择不变；非 macOS 不执行任何操作。该方法可重复调用。
+   */
+  fun prepareComposeInterop() {
+    prepareMacosComposeInterop(
+      operatingSystemName = System.getProperty("os.name"),
+      currentBlendingValue = System.getProperty("compose.interop.blending"),
+      setBlendingValue = { value -> System.setProperty("compose.interop.blending", value) },
+    )
+  }
+
+  /**
    * 注入当前进程唯一的 JCEF 应用实例。
    *
    * JCEF 不支持在同一进程中重复初始化；因此本方法只允许调用一次。应在 Desktop App 的启动代码中调用，
@@ -35,7 +49,8 @@ object DesktopWebViewRuntime {
     onBrowserClosed: () -> Unit = {},
   ) {
     synchronized(this) {
-      enableMacosInteropBlendingByDefault()
+      // 兼容旧接入方：即使未在 application 前准备，仍尽力提供正确的互操作默认值。
+      prepareComposeInterop()
       check(configuration == null) {
         "DesktopWebViewRuntime 已初始化；同一进程只能注入一个 CefApp。"
       }
@@ -55,15 +70,15 @@ object DesktopWebViewRuntime {
 /**
  * macOS 的 JCEF windowed 浏览器属于原生窗口层；Compose 默认绘制层可能遮蔽它。
  *
- * Compose 通过该属性启用官方 Swing 互操作混合层。仅在调用方未显式配置该属性时提供 Desktop WebView 的
- * 安全默认值，避免覆盖宿主已有的全局 Compose 配置。
+ * 参数化后可在不修改 JVM 全局属性的单元测试中验证“仅 macOS、且不覆盖宿主设置”的约束。
  */
-private fun enableMacosInteropBlendingByDefault() {
-  if (
-    System.getProperty("os.name").startsWith("Mac") &&
-    System.getProperty("compose.interop.blending") == null
-  ) {
-    System.setProperty("compose.interop.blending", "true")
+internal fun prepareMacosComposeInterop(
+  operatingSystemName: String,
+  currentBlendingValue: String?,
+  setBlendingValue: (String) -> Unit,
+) {
+  if (operatingSystemName.startsWith("Mac") && currentBlendingValue == null) {
+    setBlendingValue("true")
   }
 }
 
