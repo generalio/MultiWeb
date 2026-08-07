@@ -14,11 +14,12 @@ class DesktopInitialNativeViewLayoutCoordinatorTest {
     coordinator.requestInitialNativeViewLayout()
 
     assertEquals(0, target.revalidateCount)
+    assertEquals(0, target.immediatePaintCount)
     assertEquals(0, target.repaintCount)
   }
 
   @Test
-  fun `收到 showing 事件后只同步一次`() {
+  fun `收到 showing 事件后按同步顺序绘制一次`() {
     val target = FakeDesktopNativeViewLayoutTarget(isShowing = false)
     val coordinator = DesktopInitialNativeViewLayoutCoordinator(target) { false }
 
@@ -29,7 +30,28 @@ class DesktopInitialNativeViewLayoutCoordinatorTest {
     target.dispatchShowingChanged()
 
     assertEquals(1, target.revalidateCount)
+    assertEquals(1, target.immediatePaintCount)
     assertEquals(1, target.repaintCount)
+    assertEquals(
+      listOf("revalidate", "paintImmediately", "repaint"),
+      target.synchronizationOperations,
+    )
+  }
+
+  @Test
+  fun `尺寸无效时不会同步绘制`() {
+    val target = FakeDesktopNativeViewLayoutTarget(
+      isShowing = true,
+      width = 0,
+    )
+    val coordinator = DesktopInitialNativeViewLayoutCoordinator(target) { false }
+
+    coordinator.registerShowingListener()
+    coordinator.requestInitialNativeViewLayout()
+
+    assertEquals(0, target.revalidateCount)
+    assertEquals(0, target.immediatePaintCount)
+    assertEquals(0, target.repaintCount)
   }
 
   @Test
@@ -44,6 +66,7 @@ class DesktopInitialNativeViewLayoutCoordinatorTest {
 
     assertEquals(1, target.removeListenerCount)
     assertEquals(0, target.revalidateCount)
+    assertEquals(0, target.immediatePaintCount)
     assertEquals(0, target.repaintCount)
   }
 
@@ -59,6 +82,7 @@ class DesktopInitialNativeViewLayoutCoordinatorTest {
 
     assertEquals(0, target.addListenerCount)
     assertEquals(0, target.revalidateCount)
+    assertEquals(0, target.immediatePaintCount)
     assertEquals(0, target.repaintCount)
   }
 
@@ -74,6 +98,7 @@ class DesktopInitialNativeViewLayoutCoordinatorTest {
 
     assertEquals(1, target.addListenerCount)
     assertEquals(1, target.revalidateCount)
+    assertEquals(1, target.immediatePaintCount)
     assertEquals(1, target.repaintCount)
   }
 }
@@ -92,8 +117,11 @@ private class FakeDesktopNativeViewLayoutTarget(
     private set
   var revalidateCount = 0
     private set
+  var immediatePaintCount = 0
+    private set
   var repaintCount = 0
     private set
+  val synchronizationOperations = mutableListOf<String>()
 
   override fun addShowingListener(listener: () -> Unit) {
     addListenerCount++
@@ -107,10 +135,17 @@ private class FakeDesktopNativeViewLayoutTarget(
 
   override fun revalidate() {
     revalidateCount++
+    synchronizationOperations += "revalidate"
+  }
+
+  override fun paintImmediately() {
+    immediatePaintCount++
+    synchronizationOperations += "paintImmediately"
   }
 
   override fun repaint() {
     repaintCount++
+    synchronizationOperations += "repaint"
   }
 
   fun dispatchShowingChanged() {

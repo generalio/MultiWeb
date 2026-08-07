@@ -3,6 +3,8 @@ package io.github.multiweb.desktop
 import java.awt.Component
 import java.awt.event.HierarchyEvent
 import java.awt.event.HierarchyListener
+import javax.swing.JComponent
+import javax.swing.SwingUtilities
 
 /**
  * 可参与 JCEF 初始布局同步的原生视图。
@@ -27,6 +29,9 @@ internal interface DesktopNativeViewLayoutTarget {
 
   /** 请求 AWT 重新执行布局。 */
   fun revalidate()
+
+  /** 同步进入原生 Swing 视图的绘制流程。 */
+  fun paintImmediately()
 
   /** 请求 AWT 重绘原生视图。 */
   fun repaint()
@@ -74,6 +79,24 @@ internal class ComponentDesktopNativeViewLayoutTarget(
     component.revalidate()
   }
 
+  /**
+   * 同步绘制 JCEF 暴露的 JPanel，触发其内部的 `doUpdate()` 与原生浏览器子窗口绑定。
+   *
+   * JCEF windowed 模式下普通 [repaint] 只会异步请求 Swing 绘制，Compose `SwingPanel` 的首次挂载可能不会立刻
+   * 进入 `paint()`；这里仅在 Swing EDT 和可见有效边界内强制执行一次。
+   */
+  override fun paintImmediately() {
+    check(SwingUtilities.isEventDispatchThread()) {
+      "JCEF 初始同步绘制必须在 Swing EDT 执行。"
+    }
+    val width = component.width
+    val height = component.height
+    if (!component.isDisplayable || !component.isShowing || width <= 0 || height <= 0) {
+      return
+    }
+    (component as? JComponent)?.paintImmediately(0, 0, width, height) ?: component.repaint()
+  }
+
   override fun repaint() {
     component.repaint()
   }
@@ -83,8 +106,8 @@ internal class ComponentDesktopNativeViewLayoutTarget(
  * 协调 JCEF 就绪与 Swing 视图首次 showing 的布局同步。
  *
  * windowed JCEF 的原生子窗口需要在 Swing 已完成首次绘制后同步尺寸；因此只在控制器明确请求、视图可显示且尺寸
- * 有效时执行一次 [DesktopNativeViewLayoutTarget.revalidate] 与 [DesktopNativeViewLayoutTarget.repaint]。调用方必须在
- * Swing EDT 调用本类。
+ * 有效时执行一次 [DesktopNativeViewLayoutTarget.revalidate]、[DesktopNativeViewLayoutTarget.paintImmediately] 与
+ * [DesktopNativeViewLayoutTarget.repaint]。调用方必须在 Swing EDT 调用本类。
  */
 internal class DesktopInitialNativeViewLayoutCoordinator(
   private val target: DesktopNativeViewLayoutTarget,
@@ -144,6 +167,7 @@ internal class DesktopInitialNativeViewLayoutCoordinator(
       return
     }
     target.revalidate()
+    target.paintImmediately()
     target.repaint()
     isInitialLayoutSynchronized = true
   }

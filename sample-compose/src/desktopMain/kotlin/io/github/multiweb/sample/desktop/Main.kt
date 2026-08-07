@@ -25,8 +25,14 @@ import me.friwi.jcefmaven.CefAppBuilder
 /** 单个图片保存请求允许下载的最大字节数，避免网页桥触发无上限的文件写入。 */
 private const val MaxSampleImageBytes = 10L * 1024L * 1024L
 
-/** 桌面示例入口；JCEF 首次启动会按 jcefmaven 配置准备原生运行时。 */
-fun main() = application {
+/** 桌面示例入口；必须在创建 Compose 应用前准备 macOS windowed JCEF 的 Swing 互操作层。 */
+fun main() {
+  DesktopWebViewRuntime.prepareComposeInterop()
+  runDesktopSampleApplication()
+}
+
+/** JCEF 首次启动会按 jcefmaven 配置准备原生运行时。 */
+private fun runDesktopSampleApplication() = application {
   var isFullscreen by remember { mutableStateOf(false) }
   var pendingImageSaveUrl by remember { mutableStateOf<String?>(null) }
   var hostCapabilityNotice by remember { mutableStateOf<String?>(null) }
