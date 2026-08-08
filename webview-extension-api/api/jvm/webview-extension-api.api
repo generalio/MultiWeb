@@ -395,8 +395,8 @@ public final class io/github/multiweb/extension/WebFileChooserResult$Selected : 
 }
 
 public abstract interface class io/github/multiweb/extension/WebViewControllerLifecycleExtension : io/github/multiweb/extension/WebViewExtension {
-	public abstract fun onControllerAttached (Lio/github/multiweb/api/WebViewController;)V
-	public abstract fun onControllerDisposed ()V
+	public fun onControllerAttached (Lio/github/multiweb/api/WebViewController;)V
+	public fun onControllerDisposed ()V
 }
 
 public final class io/github/multiweb/extension/WebViewControllerLifecycleExtension$DefaultImpls {
@@ -412,13 +412,13 @@ public final class io/github/multiweb/extension/WebViewControllerLifecycleExtens
 }
 
 public abstract interface class io/github/multiweb/extension/WebViewExtension {
-	public abstract fun getScriptBridges ()Ljava/util/List;
-	public abstract fun onContextAction (Lio/github/multiweb/extension/WebContextAction;)V
-	public abstract fun onDownloadRequested (Lio/github/multiweb/extension/DownloadRequest;)V
-	public abstract fun onHostUiRequest (Lio/github/multiweb/extension/HostUiRequest;)V
-	public abstract fun onPageError (Lio/github/multiweb/extension/PageErrorEvent;)V
-	public abstract fun onPageFinished (Lio/github/multiweb/extension/PageFinishedEvent;)V
-	public abstract fun onPageStarted (Lio/github/multiweb/extension/PageStartedEvent;)V
+	public fun getScriptBridges ()Ljava/util/List;
+	public fun onContextAction (Lio/github/multiweb/extension/WebContextAction;)V
+	public fun onDownloadRequested (Lio/github/multiweb/extension/DownloadRequest;)V
+	public fun onHostUiRequest (Lio/github/multiweb/extension/HostUiRequest;)V
+	public fun onPageError (Lio/github/multiweb/extension/PageErrorEvent;)V
+	public fun onPageFinished (Lio/github/multiweb/extension/PageFinishedEvent;)V
+	public fun onPageStarted (Lio/github/multiweb/extension/PageStartedEvent;)V
 }
 
 public final class io/github/multiweb/extension/WebViewExtension$DefaultImpls {

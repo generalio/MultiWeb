@@ -8,209 +8,177 @@ class DesktopInitialNativeViewLayoutCoordinatorTest {
   @Test
   fun `视图尚未 showing 时不会立即同步`() {
     val target = FakeDesktopNativeViewLayoutTarget(isShowing = false)
-    val coordinator = DesktopInitialNativeViewLayoutCoordinator(
-      target = target,
-      isControllerDisposed = { false },
-      scheduleDelayedRetry = {},
-    )
+    val coordinator = createCoordinator(target)
 
     coordinator.registerShowingListener()
     coordinator.requestInitialNativeViewLayout()
 
-    assertEquals(0, target.revalidateCount)
-    assertEquals(0, target.immediatePaintCount)
-    assertEquals(0, target.repaintCount)
+    assertSynchronizationPerformed(target, expectedCount = 0)
   }
 
   @Test
-  fun `收到 showing 事件后按同步顺序绘制一次`() {
-    val target = FakeDesktopNativeViewLayoutTarget(isShowing = false)
-    val coordinator = DesktopInitialNativeViewLayoutCoordinator(
-      target = target,
-      isControllerDisposed = { false },
-      scheduleDelayedRetry = {},
+  fun `可见裁剪区域无效时不会提前同步`() {
+    val target = FakeDesktopNativeViewLayoutTarget(
+      isShowing = true,
+      visibleWidth = 0,
+      visibleHeight = 0,
     )
+    val coordinator = createCoordinator(target)
+
+    coordinator.registerShowingListener()
+    coordinator.requestInitialNativeViewLayout()
+
+    assertSynchronizationPerformed(target, expectedCount = 0)
+  }
+
+  @Test
+  fun `收到 showing 事件后会开始稳定同步`() {
+    val target = FakeDesktopNativeViewLayoutTarget(isShowing = false)
+    val delayedRetries = mutableListOf<() -> Unit>()
+    val coordinator = createCoordinator(target) { action -> delayedRetries += action }
 
     coordinator.registerShowingListener()
     coordinator.requestInitialNativeViewLayout()
     target.isShowing = true
     target.dispatchShowingChanged()
-    target.dispatchShowingChanged()
+    delayedRetries.removeFirst().invoke()
 
-    assertEquals(1, target.revalidateCount)
-    assertEquals(1, target.nativeViewSizeSynchronizationCount)
-    assertEquals(1, target.immediatePaintCount)
-    assertEquals(1, target.repaintCount)
-    assertEquals(
-      listOf("revalidate", "synchronizeNativeViewSize", "paintImmediately", "repaint"),
-      target.synchronizationOperations,
-    )
+    assertSynchronizationPerformed(target, expectedCount = 2)
   }
 
   @Test
-  fun `尺寸无效时不会同步绘制`() {
+  fun `可见裁剪区域稳定后会执行两次同步`() {
     val target = FakeDesktopNativeViewLayoutTarget(
       isShowing = true,
-      width = 0,
-    )
-    val coordinator = DesktopInitialNativeViewLayoutCoordinator(target, { false })
-
-    coordinator.registerShowingListener()
-    coordinator.requestInitialNativeViewLayout()
-
-    assertEquals(0, target.revalidateCount)
-    assertEquals(0, target.immediatePaintCount)
-    assertEquals(0, target.repaintCount)
-  }
-
-  @Test
-  fun `首次尺寸变为有效后会同步绘制一次`() {
-    val target = FakeDesktopNativeViewLayoutTarget(
-      isShowing = true,
-      width = 0,
-      height = 0,
-    )
-    val coordinator = DesktopInitialNativeViewLayoutCoordinator(
-      target = target,
-      isControllerDisposed = { false },
-      scheduleDelayedRetry = {},
-    )
-
-    coordinator.registerShowingListener()
-    coordinator.requestInitialNativeViewLayout()
-    target.width = 100
-    target.height = 100
-    target.dispatchLayoutChanged()
-
-    assertEquals(1, target.revalidateCount)
-    assertEquals(1, target.nativeViewSizeSynchronizationCount)
-    assertEquals(1, target.immediatePaintCount)
-    assertEquals(1, target.repaintCount)
-    assertEquals(
-      listOf("revalidate", "synchronizeNativeViewSize", "paintImmediately", "repaint"),
-      target.synchronizationOperations,
-    )
-  }
-
-  @Test
-  fun `同一事件循环内尺寸变为有效时延迟重试会同步绘制`() {
-    val target = FakeDesktopNativeViewLayoutTarget(
-      isShowing = true,
-      width = 0,
-      height = 0,
+      visibleWidth = 0,
+      visibleHeight = 0,
     )
     val delayedRetries = mutableListOf<() -> Unit>()
-    val coordinator = DesktopInitialNativeViewLayoutCoordinator(
-      target,
-      { false },
-      { action -> delayedRetries += action },
-    )
+    val coordinator = createCoordinator(target) { action -> delayedRetries += action }
 
     coordinator.registerShowingListener()
     coordinator.requestInitialNativeViewLayout()
-    target.width = 100
-    target.height = 100
+    target.visibleWidth = 100
+    target.visibleHeight = 100
+    delayedRetries.removeFirst().invoke()
+
+    assertSynchronizationPerformed(target, expectedCount = 1)
+    assertEquals(1, delayedRetries.size)
+    assertEquals(0, target.removeShowingListenerCount)
+    assertEquals(0, target.removeLayoutChangedListenerCount)
+
+    delayedRetries.removeFirst().invoke()
+
+    assertSynchronizationPerformed(target, expectedCount = 2)
+    assertEquals(1, target.removeShowingListenerCount)
+    assertEquals(1, target.removeLayoutChangedListenerCount)
+  }
+
+  @Test
+  fun `JCEF 就绪后会安排第二次稳定布局同步`() {
+    val target = FakeDesktopNativeViewLayoutTarget(isShowing = true)
+    val delayedRetries = mutableListOf<() -> Unit>()
+    val coordinator = createCoordinator(target) { action -> delayedRetries += action }
+
+    coordinator.registerShowingListener()
+    coordinator.requestInitialNativeViewLayout()
+
+    assertSynchronizationPerformed(target, expectedCount = 1)
+    assertEquals(1, delayedRetries.size)
+
+    delayedRetries.removeFirst().invoke()
+
+    assertSynchronizationPerformed(target, expectedCount = 2)
+    assertEquals(1, target.removeShowingListenerCount)
+    assertEquals(1, target.removeLayoutChangedListenerCount)
+  }
+
+  @Test
+  fun `真实布局事件可在延迟重试前完成稳定同步`() {
+    val target = FakeDesktopNativeViewLayoutTarget(isShowing = true)
+    val delayedRetries = mutableListOf<() -> Unit>()
+    val coordinator = createCoordinator(target) { action -> delayedRetries += action }
+
+    coordinator.registerShowingListener()
+    coordinator.requestInitialNativeViewLayout()
+    target.dispatchLayoutChanged()
     delayedRetries.single().invoke()
 
-    assertSynchronizationPerformedOnce(target)
-  }
-
-  @Test
-  fun `Swing 先 showing 后 JCEF 就绪时会同步绘制一次`() {
-    val target = FakeDesktopNativeViewLayoutTarget(isShowing = true)
-    val coordinator = DesktopInitialNativeViewLayoutCoordinator(target, { false })
-
-    coordinator.registerShowingListener()
-    coordinator.requestInitialNativeViewLayout()
-
-    assertSynchronizationPerformedOnce(target)
-  }
-
-  @Test
-  fun `JCEF 就绪后会重新同步当前尺寸`() {
-    val target = FakeDesktopNativeViewLayoutTarget(isShowing = true)
-    val coordinator = DesktopInitialNativeViewLayoutCoordinator(target, { false })
-
-    coordinator.registerShowingListener()
-    coordinator.requestInitialNativeViewLayout()
-
-    assertEquals(1, target.nativeViewSizeSynchronizationCount)
-  }
-
-  @Test
-  fun `初始同步完成后多次 resize 不会重复绘制`() {
-    val target = FakeDesktopNativeViewLayoutTarget(isShowing = true)
-    val coordinator = DesktopInitialNativeViewLayoutCoordinator(target, { false })
-
-    coordinator.registerShowingListener()
-    coordinator.requestInitialNativeViewLayout()
-    target.dispatchLayoutChanged()
-    target.dispatchLayoutChanged()
-
-    assertSynchronizationPerformedOnce(target)
+    assertSynchronizationPerformed(target, expectedCount = 2)
     assertEquals(1, target.removeShowingListenerCount)
     assertEquals(1, target.removeLayoutChangedListenerCount)
   }
 
   @Test
-  fun `销毁后不再同步且移除监听`() {
+  fun `同步完成后多次 resize 不会重复绘制`() {
     val target = FakeDesktopNativeViewLayoutTarget(isShowing = true)
-    val coordinator = DesktopInitialNativeViewLayoutCoordinator(target, { false })
+    val delayedRetries = mutableListOf<() -> Unit>()
+    val coordinator = createCoordinator(target) { action -> delayedRetries += action }
 
     coordinator.registerShowingListener()
+    coordinator.requestInitialNativeViewLayout()
+    delayedRetries.removeFirst().invoke()
+    target.dispatchLayoutChanged()
+    target.dispatchLayoutChanged()
+
+    assertSynchronizationPerformed(target, expectedCount = 2)
+  }
+
+  @Test
+  fun `销毁后不再执行已排队的稳定同步`() {
+    val target = FakeDesktopNativeViewLayoutTarget(isShowing = true)
+    val delayedRetries = mutableListOf<() -> Unit>()
+    val coordinator = createCoordinator(target) { action -> delayedRetries += action }
+
+    coordinator.registerShowingListener()
+    coordinator.requestInitialNativeViewLayout()
     coordinator.dispose()
-    coordinator.requestInitialNativeViewLayout()
-    target.dispatchShowingChanged()
+    delayedRetries.single().invoke()
 
+    assertSynchronizationPerformed(target, expectedCount = 1)
     assertEquals(1, target.removeShowingListenerCount)
     assertEquals(1, target.removeLayoutChangedListenerCount)
-    assertEquals(0, target.revalidateCount)
-    assertEquals(0, target.immediatePaintCount)
-    assertEquals(0, target.repaintCount)
   }
 
   @Test
   fun `控制器已销毁时不执行同步`() {
-    val isControllerDisposed = true
     val target = FakeDesktopNativeViewLayoutTarget(isShowing = true)
-    val coordinator = DesktopInitialNativeViewLayoutCoordinator(target, { isControllerDisposed })
+    val coordinator = createCoordinator(target, isControllerDisposed = { true })
 
     coordinator.registerShowingListener()
     coordinator.requestInitialNativeViewLayout()
     target.dispatchShowingChanged()
 
-    assertEquals(0, target.addListenerCount)
+    assertEquals(0, target.addShowingListenerCount)
     assertEquals(0, target.addLayoutChangedListenerCount)
-    assertEquals(0, target.revalidateCount)
-    assertEquals(0, target.immediatePaintCount)
-    assertEquals(0, target.repaintCount)
-  }
-
-  @Test
-  fun `多次注册不会重复添加 showing 监听`() {
-    val target = FakeDesktopNativeViewLayoutTarget(isShowing = true)
-    val coordinator = DesktopInitialNativeViewLayoutCoordinator(target, { false })
-
-    coordinator.registerShowingListener()
-    coordinator.registerShowingListener()
-    coordinator.requestInitialNativeViewLayout()
-    target.dispatchShowingChanged()
-
-    assertEquals(1, target.addListenerCount)
-    assertEquals(1, target.addLayoutChangedListenerCount)
-    assertEquals(1, target.revalidateCount)
-    assertEquals(1, target.immediatePaintCount)
-    assertEquals(1, target.repaintCount)
+    assertSynchronizationPerformed(target, expectedCount = 0)
   }
 }
 
-private fun assertSynchronizationPerformedOnce(target: FakeDesktopNativeViewLayoutTarget) {
-  assertEquals(1, target.revalidateCount)
-  assertEquals(1, target.nativeViewSizeSynchronizationCount)
-  assertEquals(1, target.immediatePaintCount)
-  assertEquals(1, target.repaintCount)
+private fun createCoordinator(
+  target: FakeDesktopNativeViewLayoutTarget,
+  isControllerDisposed: () -> Boolean = { false },
+  scheduleDelayedRetry: ((() -> Unit) -> Unit) = {},
+): DesktopInitialNativeViewLayoutCoordinator {
+  return DesktopInitialNativeViewLayoutCoordinator(
+    target = target,
+    isControllerDisposed = isControllerDisposed,
+    scheduleRetry = scheduleDelayedRetry,
+  )
+}
+
+private fun assertSynchronizationPerformed(
+  target: FakeDesktopNativeViewLayoutTarget,
+  expectedCount: Int,
+) {
+  assertEquals(expectedCount, target.revalidateCount)
+  assertEquals(expectedCount, target.nativeViewSizeSynchronizationCount)
+  assertEquals(expectedCount, target.immediatePaintCount)
+  assertEquals(expectedCount, target.repaintCount)
   assertEquals(
-    listOf("revalidate", "synchronizeNativeViewSize", "paintImmediately", "repaint"),
+    List(expectedCount) {
+      listOf("revalidate", "synchronizeNativeViewSize", "paintImmediately", "repaint")
+    }.flatten(),
     target.synchronizationOperations,
   )
 }
@@ -220,11 +188,13 @@ private class FakeDesktopNativeViewLayoutTarget(
   override var isShowing: Boolean,
   override var width: Int = 100,
   override var height: Int = 100,
+  override var visibleWidth: Int = 100,
+  override var visibleHeight: Int = 100,
 ) : DesktopNativeViewLayoutTarget {
   private val showingListeners = mutableSetOf<() -> Unit>()
   private val layoutChangedListeners = mutableSetOf<() -> Unit>()
 
-  var addListenerCount = 0
+  var addShowingListenerCount = 0
     private set
   var removeShowingListenerCount = 0
     private set
@@ -243,7 +213,7 @@ private class FakeDesktopNativeViewLayoutTarget(
   val synchronizationOperations = mutableListOf<String>()
 
   override fun addShowingListener(listener: () -> Unit) {
-    addListenerCount++
+    addShowingListenerCount++
     showingListeners += listener
   }
 

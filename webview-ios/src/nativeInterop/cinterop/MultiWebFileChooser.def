@@ -1,4 +1,0 @@
-language = Objective-C
-package = io.github.multiweb.ios.filechooser
-headers = MultiWebFileChooser.h
-linkerOpts = -framework WebKit

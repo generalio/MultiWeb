@@ -3,10 +3,14 @@ package io.github.multiweb.desktop
 import java.awt.Component
 import java.awt.event.ComponentAdapter
 import java.awt.event.ComponentEvent
+import java.awt.event.HierarchyBoundsAdapter
 import java.awt.event.HierarchyEvent
 import java.awt.event.HierarchyListener
+import java.awt.geom.AffineTransform
+import java.awt.image.BufferedImage
 import javax.swing.JComponent
 import javax.swing.SwingUtilities
+import javax.swing.Timer
 
 /**
  * 可参与 JCEF 初始布局同步的原生视图。
@@ -22,6 +26,10 @@ internal interface DesktopNativeViewLayoutTarget {
   val width: Int
   /** 当前布局高度。 */
   val height: Int
+  /** 当前实际可见区域宽度。 */
+  val visibleWidth: Int
+  /** 当前实际可见区域高度。 */
+  val visibleHeight: Int
 
   /** 注册视图进入 showing 状态时的回调。 */
   fun addShowingListener(listener: () -> Unit)
@@ -58,7 +66,7 @@ internal class ComponentDesktopNativeViewLayoutTarget(
   private val component: Component,
 ) : DesktopNativeViewLayoutTarget {
   private val hierarchyListeners = mutableMapOf<() -> Unit, HierarchyListener>()
-  private val componentListeners = mutableMapOf<() -> Unit, ComponentAdapter>()
+  private val layoutChangedListeners = mutableMapOf<() -> Unit, LayoutChangedListenerRegistration>()
 
   override val isDisplayable: Boolean
     get() = component.isDisplayable
@@ -71,6 +79,12 @@ internal class ComponentDesktopNativeViewLayoutTarget(
 
   override val height: Int
     get() = component.height
+
+  override val visibleWidth: Int
+    get() = component.visibleSize().width
+
+  override val visibleHeight: Int
+    get() = component.visibleSize().height
 
   override fun addShowingListener(listener: () -> Unit) {
     if (hierarchyListeners.containsKey(listener)) {
@@ -93,7 +107,7 @@ internal class ComponentDesktopNativeViewLayoutTarget(
   }
 
   override fun addLayoutChangedListener(listener: () -> Unit) {
-    if (componentListeners.containsKey(listener)) {
+    if (layoutChangedListeners.containsKey(listener)) {
       return
     }
     val componentListener = object : ComponentAdapter() {
@@ -105,12 +119,28 @@ internal class ComponentDesktopNativeViewLayoutTarget(
         listener()
       }
     }
-    componentListeners[listener] = componentListener
+    val hierarchyBoundsListener = object : HierarchyBoundsAdapter() {
+      override fun ancestorResized(event: HierarchyEvent) {
+        listener()
+      }
+
+      override fun ancestorMoved(event: HierarchyEvent) {
+        listener()
+      }
+    }
+    layoutChangedListeners[listener] = LayoutChangedListenerRegistration(
+      componentListener = componentListener,
+      hierarchyBoundsListener = hierarchyBoundsListener,
+    )
     component.addComponentListener(componentListener)
+    component.addHierarchyBoundsListener(hierarchyBoundsListener)
   }
 
   override fun removeLayoutChangedListener(listener: () -> Unit) {
-    componentListeners.remove(listener)?.let(component::removeComponentListener)
+    layoutChangedListeners.remove(listener)?.let { registration ->
+      component.removeComponentListener(registration.componentListener)
+      component.removeHierarchyBoundsListener(registration.hierarchyBoundsListener)
+    }
   }
 
   override fun revalidate() {
@@ -124,8 +154,9 @@ internal class ComponentDesktopNativeViewLayoutTarget(
   /**
    * 同步绘制 JCEF 暴露的 JPanel，触发其内部的 `doUpdate()` 与原生浏览器子窗口绑定。
    *
-   * JCEF windowed 模式下普通 [repaint] 只会异步请求 Swing 绘制，Compose `SwingPanel` 的首次挂载可能不会立刻
-   * 进入 `paint()`；这里仅在 Swing EDT 和可见有效边界内强制执行一次。
+   * Compose `SwingPanel` 的首次 [JComponent.paintImmediately] 不保证会实际调用嵌入组件重写的 `paint()`；
+   * 而 JCEF 恰好在该方法中安排带原生父窗口的浏览器创建。因此在正常的立即绘制请求之后，再使用极小的离屏
+   * Graphics 明确执行一次真实绘制。JCEF 使用组件自身的可见区域计算布局，离屏图像尺寸不会影响浏览器尺寸。
    */
   override fun paintImmediately() {
     check(SwingUtilities.isEventDispatchThread()) {
@@ -136,11 +167,46 @@ internal class ComponentDesktopNativeViewLayoutTarget(
     if (!component.isDisplayable || !component.isShowing || width <= 0 || height <= 0) {
       return
     }
-    (component as? JComponent)?.paintImmediately(0, 0, width, height) ?: component.repaint()
+    val swingComponent = component as? JComponent
+    if (swingComponent == null) {
+      component.repaint()
+      return
+    }
+    swingComponent.paintImmediately(0, 0, width, height)
+    JcefInitialPaintDispatcher.paint(swingComponent)
   }
 
   override fun repaint() {
     component.repaint()
+  }
+
+  private fun Component.visibleSize() = (this as? JComponent)?.visibleRect?.size ?: size
+
+  private data class LayoutChangedListenerRegistration(
+    val componentListener: ComponentAdapter,
+    val hierarchyBoundsListener: HierarchyBoundsAdapter,
+  )
+}
+
+/**
+ * 显式调用 JCEF Windowed 组件的 [JComponent.paint]。
+ *
+ * JCEF 的内部 `delayedUpdate` 会在本次绘制后以当前 macOS 原生窗口句柄创建浏览器。不能使用
+ * `createImmediately()` 兜底，否则浏览器可能在未绑定父窗口时创建，并再次退化为只能在窗口 resize 后显示。
+ */
+internal object JcefInitialPaintDispatcher {
+  fun paint(component: JComponent) {
+    val image = BufferedImage(1, 1, BufferedImage.TYPE_INT_ARGB)
+    val graphics = image.createGraphics()
+    try {
+      graphics.transform = component.graphicsConfiguration
+        ?.defaultTransform
+        ?.let(::AffineTransform)
+        ?: AffineTransform()
+      component.paint(graphics)
+    } finally {
+      graphics.dispose()
+    }
   }
 }
 
@@ -158,6 +224,7 @@ internal class DesktopNativeViewAttachmentCoordinator(
 ) {
   private var isDisposed = false
   private var isShowingListenerRegistered = false
+  private var isLayoutChangedListenerRegistered = false
   private var isBrowserCreationRequested = false
   private var isBrowserCreationStarted = false
   private var isBrowserCreated = false
@@ -170,9 +237,11 @@ internal class DesktopNativeViewAttachmentCoordinator(
     }
     target.addShowingListener(showingListener)
     isShowingListenerRegistered = true
+    target.addLayoutChangedListener(showingListener)
+    isLayoutChangedListenerRegistered = true
   }
 
-  /** 请求创建浏览器；仅在组件已显示且拥有原生父视图时执行。 */
+  /** 请求创建浏览器；仅在组件已显示、已完成可见裁剪且拥有原生父视图时执行。 */
   fun requestBrowserCreation() {
     if (isUnavailable()) {
       return
@@ -187,7 +256,7 @@ internal class DesktopNativeViewAttachmentCoordinator(
       return
     }
     isDisposed = true
-    removeShowingListener()
+    removeViewReadyListeners()
   }
 
   private fun createBrowserIfReady() {
@@ -197,7 +266,11 @@ internal class DesktopNativeViewAttachmentCoordinator(
       isBrowserCreated ||
       isBrowserCreationStarted ||
       !target.isDisplayable ||
-      !target.isShowing
+      !target.isShowing ||
+      target.width <= 0 ||
+      target.height <= 0 ||
+      target.visibleWidth <= 0 ||
+      target.visibleHeight <= 0
     ) {
       return
     }
@@ -205,18 +278,21 @@ internal class DesktopNativeViewAttachmentCoordinator(
     try {
       createBrowser()
       isBrowserCreated = true
-      removeShowingListener()
+      removeViewReadyListeners()
     } finally {
       isBrowserCreationStarted = false
     }
   }
 
-  private fun removeShowingListener() {
-    if (!isShowingListenerRegistered) {
-      return
+  private fun removeViewReadyListeners() {
+    if (isShowingListenerRegistered) {
+      target.removeShowingListener(showingListener)
+      isShowingListenerRegistered = false
     }
-    target.removeShowingListener(showingListener)
-    isShowingListenerRegistered = false
+    if (isLayoutChangedListenerRegistered) {
+      target.removeLayoutChangedListener(showingListener)
+      isLayoutChangedListenerRegistered = false
+    }
   }
 
   private fun isUnavailable(): Boolean = isDisposed || isControllerDisposed()
@@ -225,25 +301,30 @@ internal class DesktopNativeViewAttachmentCoordinator(
 /**
  * 协调 JCEF 就绪与 Swing 视图首次 showing 的布局同步。
  *
- * Compose `SwingPanel` 的首次有效尺寸可能晚于 JCEF 创建或 showing 事件；因此在控制器明确请求后同时监听 showing 与
- * 尺寸变化，并在 Swing EDT 延迟重试一次。仅当视图可显示且尺寸有效时，才执行一次
+ * Compose `SwingPanel` 的首次有效可见区域可能晚于 JCEF 创建或 showing 事件；因此在控制器明确请求后同时监听 showing 与
+ * 祖先布局变化，并在 JCEF 的原生子窗口完成绑定后再延迟同步一次。仅当视图可显示、尺寸与裁剪区域均有效时，才执行
  * [DesktopNativeViewLayoutTarget.revalidate]、[DesktopNativeViewLayoutTarget.paintImmediately] 与
  * [DesktopNativeViewLayoutTarget.repaint]。调用方必须在 Swing EDT 调用本类。
  */
 internal class DesktopInitialNativeViewLayoutCoordinator(
   private val target: DesktopNativeViewLayoutTarget,
   private val isControllerDisposed: () -> Boolean,
-  private val scheduleDelayedRetry: ((() -> Unit) -> Unit) = { action ->
-    SwingUtilities.invokeLater { action() }
+  private val scheduleRetry: ((() -> Unit) -> Unit) = { action ->
+    Timer(INITIAL_LAYOUT_RETRY_DELAY_MILLIS) { action() }.apply {
+      isRepeats = false
+      start()
+    }
   },
 ) {
   private var isDisposed = false
   private var isShowingListenerRegistered = false
   private var isLayoutChangedListenerRegistered = false
   private var isInitialLayoutRequested = false
-  private var isInitialLayoutSynchronized = false
+  private var isInitialLayoutCompleted = false
   private var isSynchronizing = false
   private var isDelayedRetryScheduled = false
+  private var invalidLayoutRetryCount = 0
+  private var synchronizationPassCount = 0
   private val initialLayoutListener: () -> Unit = ::synchronizeNativeViewLayoutIfReady
 
   /** 注册一次 showing 监听；视图先于 JCEF 就绪时也可安全调用。 */
@@ -279,7 +360,7 @@ internal class DesktopInitialNativeViewLayoutCoordinator(
     removeInitialLayoutListeners()
   }
 
-  /** 初始同步成功后立即移除全部监听，窗口后续缩放不得再次触发同步绘制。 */
+  /** 初始同步完成后移除全部监听，窗口后续缩放不得再次触发同步绘制。 */
   private fun removeInitialLayoutListeners() {
     if (isShowingListenerRegistered) {
       target.removeShowingListener(initialLayoutListener)
@@ -291,12 +372,12 @@ internal class DesktopInitialNativeViewLayoutCoordinator(
     }
   }
 
-  /** 仅在 JCEF 已请求、Swing 已显示且布局尺寸有效时执行一次同步。 */
+  /** 仅在 JCEF 已请求、Swing 已显示且布局尺寸与可见裁剪区域有效时执行同步。 */
   private fun synchronizeNativeViewLayoutIfReady() {
     if (
       isUnavailable() ||
       !isInitialLayoutRequested ||
-      isInitialLayoutSynchronized ||
+      isInitialLayoutCompleted ||
       isSynchronizing
     ) {
       return
@@ -305,9 +386,11 @@ internal class DesktopInitialNativeViewLayoutCoordinator(
       !target.isDisplayable ||
       !target.isShowing ||
       target.width <= 0 ||
-      target.height <= 0
+      target.height <= 0 ||
+      target.visibleWidth <= 0 ||
+      target.visibleHeight <= 0
     ) {
-      scheduleOneDelayedRetry()
+      scheduleRetryForInvalidLayout()
       return
     }
     isSynchronizing = true
@@ -316,24 +399,48 @@ internal class DesktopInitialNativeViewLayoutCoordinator(
       target.synchronizeNativeViewSize()
       target.paintImmediately()
       target.repaint()
-      isInitialLayoutSynchronized = true
-      removeInitialLayoutListeners()
+      synchronizationPassCount++
+      if (synchronizationPassCount == INITIAL_LAYOUT_SYNCHRONIZATION_PASSES) {
+        isInitialLayoutCompleted = true
+        removeInitialLayoutListeners()
+      } else {
+        scheduleStabilizationRetry()
+      }
     } finally {
       isSynchronizing = false
     }
   }
 
-  /** 覆盖同一 EDT 事件循环内才完成的首次布局；未就绪时仍等待下一次真实视图事件。 */
-  private fun scheduleOneDelayedRetry() {
-    if (isDelayedRetryScheduled || isUnavailable() || isInitialLayoutSynchronized) {
+  /** 布局尚未稳定时的有限重试；次数耗尽后仍保留布局监听等待真实事件。 */
+  private fun scheduleRetryForInvalidLayout() {
+    if (invalidLayoutRetryCount == MAX_INVALID_LAYOUT_RETRIES) {
+      return
+    }
+    invalidLayoutRetryCount++
+    scheduleDelayedRetry()
+  }
+
+  /** JCEF 创建原生子窗口后，再执行一次布局同步以覆盖异步 parent 绑定。 */
+  private fun scheduleStabilizationRetry() {
+    scheduleDelayedRetry()
+  }
+
+  private fun scheduleDelayedRetry() {
+    if (isDelayedRetryScheduled || isUnavailable() || isInitialLayoutCompleted) {
       return
     }
     isDelayedRetryScheduled = true
-    scheduleDelayedRetry {
+    scheduleRetry {
       isDelayedRetryScheduled = false
       synchronizeNativeViewLayoutIfReady()
     }
   }
 
   private fun isUnavailable(): Boolean = isDisposed || isControllerDisposed()
+
+  private companion object {
+    const val INITIAL_LAYOUT_RETRY_DELAY_MILLIS = 100
+    const val INITIAL_LAYOUT_SYNCHRONIZATION_PASSES = 2
+    const val MAX_INVALID_LAYOUT_RETRIES = 3
+  }
 }

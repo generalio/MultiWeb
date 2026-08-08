@@ -1,8 +1,5 @@
 package io.github.multiweb.ios
 
-import io.github.multiweb.ios.filechooser.MultiWebFileChooserAllowsDirectories
-import io.github.multiweb.ios.filechooser.MultiWebFileChooserAllowsMultipleSelection
-import io.github.multiweb.ios.filechooser.MultiWebFileChooserDelegateProtocol
 import io.github.multiweb.api.NavigationDecision
 import io.github.multiweb.api.NavigationPolicy
 import io.github.multiweb.api.NavigationRequest
@@ -45,6 +42,8 @@ import platform.WebKit.WKNavigationDelegateProtocol
 import platform.WebKit.WKNavigationResponse
 import platform.WebKit.WKNavigationResponsePolicy
 import platform.WebKit.WKNavigationTypeOther
+import platform.WebKit.WKFrameInfo
+import platform.WebKit.WKOpenPanelParameters
 import platform.WebKit.WKPreferences
 import platform.WebKit.WKContextMenuElementInfo
 import platform.WebKit.WKUIDelegateProtocol
@@ -346,14 +345,14 @@ class IosWebViewController(
    * 上传保持系统不支持状态。无论宿主处理器是否存在，都不会触发 UIKit 的默认选取器或隐式申请媒体权限。
    */
   private fun handleFileChooser(
-    parameters: Any?,
+    parameters: WKOpenPanelParameters,
     completionHandler: (List<*>?) -> Unit,
   ) {
     activeFileChooserCompletion?.invoke(null)
     activeFileChooserCompletion = completionHandler
     val request = WebFileChooserRequest(
-      allowMultipleSelection = MultiWebFileChooserAllowsMultipleSelection(parameters),
-      allowDirectories = MultiWebFileChooserAllowsDirectories(parameters),
+      allowMultipleSelection = parameters.allowsMultipleSelection,
+      allowDirectories = parameters.allowsDirectories,
     )
     val handler = fileChooserHandler
     if (handler == null) {
@@ -515,7 +514,7 @@ class IosWebViewController(
   /** 仅观察 WebKit 系统上下文菜单；不提供自定义配置，以保留系统默认菜单和预览行为。 */
   private class IosUiDelegate(
     private val controller: IosWebViewController,
-  ) : NSObject(), WKUIDelegateProtocol, MultiWebFileChooserDelegateProtocol {
+  ) : NSObject(), WKUIDelegateProtocol {
     @ObjCSignatureOverride
     override fun webView(
       webView: WKWebView,
@@ -526,12 +525,11 @@ class IosWebViewController(
 
     /** iOS 18.4+ 的网页文件上传入口；宿主完成回调前 WebKit 会保持当前选择请求。 */
     override fun webView(
-      webView: Any?,
-      runOpenPanelWithParameters: Any?,
-      initiatedByFrame: Any?,
-      completionHandler: ((List<*>?) -> Unit)?,
+      webView: WKWebView,
+      runOpenPanelWithParameters: WKOpenPanelParameters,
+      initiatedByFrame: WKFrameInfo,
+      completionHandler: (List<*>?) -> Unit,
     ) {
-      completionHandler ?: return
       controller.handleFileChooser(runOpenPanelWithParameters, completionHandler)
     }
   }

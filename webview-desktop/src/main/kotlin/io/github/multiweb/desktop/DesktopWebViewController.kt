@@ -126,7 +126,7 @@ class DesktopWebViewController(
   /** 等待 JCEF 与 Swing 均就绪后同步 windowed 原生浏览器的首次布局。 */
   private lateinit var initialNativeViewLayoutCoordinator: DesktopInitialNativeViewLayoutCoordinator
 
-  /** `createImmediately()` 已调用后才可以请求 JCEF 的正常浏览器关闭路径。 */
+  /** 已请求 JCEF 创建后才可以请求浏览器的正常关闭路径。 */
   private var isBrowserCreationStarted = false
 
   /** 控制器是否已释放。释放后除 [dispose] 外的操作都会抛出 [IllegalStateException]。 */
@@ -178,7 +178,9 @@ class DesktopWebViewController(
       isControllerDisposed = { isDisposed },
       createBrowser = {
         isBrowserCreationStarted = true
-        browser.createImmediately()
+        // JCEF Windowed 浏览器必须由视图绘制后的内部延迟更新创建；该路径会携带当前 macOS 原生窗口句柄。
+        // 禁止调用 createImmediately()，其无父窗口创建路径会导致首帧直到窗口 resize 才重新绑定并显示。
+        nativeViewTarget.paintImmediately()
       },
     )
     initialNativeViewLayoutCoordinator = DesktopInitialNativeViewLayoutCoordinator(
