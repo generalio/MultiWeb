@@ -133,6 +133,84 @@ internal class ComponentDesktopNativeViewLayoutTarget(
 }
 
 /**
+ * 协调 JCEF 浏览器创建与 Compose Swing 组件挂载。
+ *
+ * windowed JCEF 会在 [org.cef.browser.CefBrowser.createImmediately] 时创建原生子窗口；如果此时 Compose 的
+ * `SwingPanel` 尚未进入原生窗口层级，首帧可能不会获得有效的父视图，直到用户缩放窗口才触发后续原生布局。
+ * 因此必须等待目标组件真正 showing 后再创建浏览器。
+ */
+internal class DesktopNativeViewAttachmentCoordinator(
+  private val target: DesktopNativeViewLayoutTarget,
+  private val isControllerDisposed: () -> Boolean,
+  private val createBrowser: () -> Unit,
+) {
+  private var isDisposed = false
+  private var isShowingListenerRegistered = false
+  private var isBrowserCreationRequested = false
+  private var isBrowserCreationStarted = false
+  private var isBrowserCreated = false
+  private val showingListener: () -> Unit = ::createBrowserIfReady
+
+  /** 注册 showing 监听；浏览器创建请求可以先于原生视图挂载到达。 */
+  fun registerShowingListener() {
+    if (isUnavailable() || isShowingListenerRegistered) {
+      return
+    }
+    target.addShowingListener(showingListener)
+    isShowingListenerRegistered = true
+  }
+
+  /** 请求创建浏览器；仅在组件已显示且拥有原生父视图时执行。 */
+  fun requestBrowserCreation() {
+    if (isUnavailable()) {
+      return
+    }
+    isBrowserCreationRequested = true
+    createBrowserIfReady()
+  }
+
+  /** 取消等待中的创建请求；已开始创建的浏览器由控制器自身关闭。 */
+  fun dispose() {
+    if (isDisposed) {
+      return
+    }
+    isDisposed = true
+    removeShowingListener()
+  }
+
+  private fun createBrowserIfReady() {
+    if (
+      isUnavailable() ||
+      !isBrowserCreationRequested ||
+      isBrowserCreated ||
+      isBrowserCreationStarted ||
+      !target.isDisplayable ||
+      !target.isShowing
+    ) {
+      return
+    }
+    isBrowserCreationStarted = true
+    try {
+      createBrowser()
+      isBrowserCreated = true
+      removeShowingListener()
+    } finally {
+      isBrowserCreationStarted = false
+    }
+  }
+
+  private fun removeShowingListener() {
+    if (!isShowingListenerRegistered) {
+      return
+    }
+    target.removeShowingListener(showingListener)
+    isShowingListenerRegistered = false
+  }
+
+  private fun isUnavailable(): Boolean = isDisposed || isControllerDisposed()
+}
+
+/**
  * 协调 JCEF 就绪与 Swing 视图首次 showing 的布局同步。
  *
  * Compose `SwingPanel` 的首次有效尺寸可能晚于 JCEF 创建或 showing 事件；因此在控制器明确请求后同时监听 showing 与

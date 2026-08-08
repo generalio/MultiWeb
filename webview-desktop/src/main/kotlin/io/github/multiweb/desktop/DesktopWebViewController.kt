@@ -121,8 +121,13 @@ class DesktopWebViewController(
 
   /** 供宿主添加到 Swing/AWT 视图层级的 JCEF 原生组件。 */
   val view: Component
+  /** 等待 Compose Swing 宿主挂载后才创建 JCEF 原生浏览器，避免首帧缺失父视图。 */
+  private lateinit var nativeViewAttachmentCoordinator: DesktopNativeViewAttachmentCoordinator
   /** 等待 JCEF 与 Swing 均就绪后同步 windowed 原生浏览器的首次布局。 */
   private lateinit var initialNativeViewLayoutCoordinator: DesktopInitialNativeViewLayoutCoordinator
+
+  /** `createImmediately()` 已调用后才可以请求 JCEF 的正常浏览器关闭路径。 */
+  private var isBrowserCreationStarted = false
 
   /** 控制器是否已释放。释放后除 [dispose] 外的操作都会抛出 [IllegalStateException]。 */
   @Volatile
@@ -167,12 +172,22 @@ class DesktopWebViewController(
     )
     browser = client.createBrowser("about:blank", false, false)
     view = browser.uiComponent
+    val nativeViewTarget = ComponentDesktopNativeViewLayoutTarget(view)
+    nativeViewAttachmentCoordinator = DesktopNativeViewAttachmentCoordinator(
+      target = nativeViewTarget,
+      isControllerDisposed = { isDisposed },
+      createBrowser = {
+        isBrowserCreationStarted = true
+        browser.createImmediately()
+      },
+    )
     initialNativeViewLayoutCoordinator = DesktopInitialNativeViewLayoutCoordinator(
-      target = ComponentDesktopNativeViewLayoutTarget(view),
+      target = nativeViewTarget,
       isControllerDisposed = { isDisposed },
     )
+    nativeViewAttachmentCoordinator.registerShowingListener()
     initialNativeViewLayoutCoordinator.registerShowingListener()
-    browser.createImmediately()
+    nativeViewAttachmentCoordinator.requestBrowserCreation()
     extensions.filterIsInstance<WebViewControllerLifecycleExtension>().forEach { extension ->
       extension.onControllerAttached(this)
     }
@@ -260,6 +275,7 @@ class DesktopWebViewController(
     }
 
     isDisposed = true
+    nativeViewAttachmentCoordinator.dispose()
     initialNativeViewLayoutCoordinator.dispose()
     extensions.filterIsInstance<WebViewControllerLifecycleExtension>().forEach { extension ->
       extension.onControllerDisposed()
@@ -270,7 +286,11 @@ class DesktopWebViewController(
     activeFileChoosers.forEach(DesktopFileChooserCallbackGuard::cancel)
     activeFileChoosers.clear()
     scriptBridgeInstallation.dispose()
-    closeBrowser()
+    if (isBrowserCreationStarted) {
+      closeBrowser()
+    } else {
+      disposeUncreatedBrowser()
+    }
     state = state.copy(isLoading = false)
   }
 
@@ -283,6 +303,20 @@ class DesktopWebViewController(
    */
   private fun closeBrowser() {
     closeDesktopBrowser(browser)
+  }
+
+  /**
+   * Compose 页面可能在原生视图首次 showing 前离开组合；此时没有可关闭的 JCEF Browser，直接释放 Client 并通知宿主。
+   *
+   * 不能等待 `onBeforeClose`：未创建的浏览器不会产生该回调，应用退出协调器会因此永久等待控制器关闭确认。
+   */
+  private fun disposeUncreatedBrowser() {
+    if (isClientDisposed) {
+      return
+    }
+    isClientDisposed = true
+    client.dispose()
+    SwingUtilities.invokeLater(onBrowserClosed)
   }
 
   private fun configureClient(client: CefClient) {
