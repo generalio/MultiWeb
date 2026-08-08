@@ -8,7 +8,11 @@ class DesktopInitialNativeViewLayoutCoordinatorTest {
   @Test
   fun `视图尚未 showing 时不会立即同步`() {
     val target = FakeDesktopNativeViewLayoutTarget(isShowing = false)
-    val coordinator = DesktopInitialNativeViewLayoutCoordinator(target, { false })
+    val coordinator = DesktopInitialNativeViewLayoutCoordinator(
+      target = target,
+      isControllerDisposed = { false },
+      scheduleDelayedRetry = {},
+    )
 
     coordinator.registerShowingListener()
     coordinator.requestInitialNativeViewLayout()
@@ -21,7 +25,11 @@ class DesktopInitialNativeViewLayoutCoordinatorTest {
   @Test
   fun `收到 showing 事件后按同步顺序绘制一次`() {
     val target = FakeDesktopNativeViewLayoutTarget(isShowing = false)
-    val coordinator = DesktopInitialNativeViewLayoutCoordinator(target, { false })
+    val coordinator = DesktopInitialNativeViewLayoutCoordinator(
+      target = target,
+      isControllerDisposed = { false },
+      scheduleDelayedRetry = {},
+    )
 
     coordinator.registerShowingListener()
     coordinator.requestInitialNativeViewLayout()
@@ -30,10 +38,11 @@ class DesktopInitialNativeViewLayoutCoordinatorTest {
     target.dispatchShowingChanged()
 
     assertEquals(1, target.revalidateCount)
+    assertEquals(1, target.nativeViewSizeSynchronizationCount)
     assertEquals(1, target.immediatePaintCount)
     assertEquals(1, target.repaintCount)
     assertEquals(
-      listOf("revalidate", "paintImmediately", "repaint"),
+      listOf("revalidate", "synchronizeNativeViewSize", "paintImmediately", "repaint"),
       target.synchronizationOperations,
     )
   }
@@ -61,7 +70,11 @@ class DesktopInitialNativeViewLayoutCoordinatorTest {
       width = 0,
       height = 0,
     )
-    val coordinator = DesktopInitialNativeViewLayoutCoordinator(target, { false })
+    val coordinator = DesktopInitialNativeViewLayoutCoordinator(
+      target = target,
+      isControllerDisposed = { false },
+      scheduleDelayedRetry = {},
+    )
 
     coordinator.registerShowingListener()
     coordinator.requestInitialNativeViewLayout()
@@ -70,10 +83,11 @@ class DesktopInitialNativeViewLayoutCoordinatorTest {
     target.dispatchLayoutChanged()
 
     assertEquals(1, target.revalidateCount)
+    assertEquals(1, target.nativeViewSizeSynchronizationCount)
     assertEquals(1, target.immediatePaintCount)
     assertEquals(1, target.repaintCount)
     assertEquals(
-      listOf("revalidate", "paintImmediately", "repaint"),
+      listOf("revalidate", "synchronizeNativeViewSize", "paintImmediately", "repaint"),
       target.synchronizationOperations,
     )
   }
@@ -110,6 +124,17 @@ class DesktopInitialNativeViewLayoutCoordinatorTest {
     coordinator.requestInitialNativeViewLayout()
 
     assertSynchronizationPerformedOnce(target)
+  }
+
+  @Test
+  fun `JCEF 就绪后会重新同步当前尺寸`() {
+    val target = FakeDesktopNativeViewLayoutTarget(isShowing = true)
+    val coordinator = DesktopInitialNativeViewLayoutCoordinator(target, { false })
+
+    coordinator.registerShowingListener()
+    coordinator.requestInitialNativeViewLayout()
+
+    assertEquals(1, target.nativeViewSizeSynchronizationCount)
   }
 
   @Test
@@ -181,10 +206,11 @@ class DesktopInitialNativeViewLayoutCoordinatorTest {
 
 private fun assertSynchronizationPerformedOnce(target: FakeDesktopNativeViewLayoutTarget) {
   assertEquals(1, target.revalidateCount)
+  assertEquals(1, target.nativeViewSizeSynchronizationCount)
   assertEquals(1, target.immediatePaintCount)
   assertEquals(1, target.repaintCount)
   assertEquals(
-    listOf("revalidate", "paintImmediately", "repaint"),
+    listOf("revalidate", "synchronizeNativeViewSize", "paintImmediately", "repaint"),
     target.synchronizationOperations,
   )
 }
@@ -207,6 +233,8 @@ private class FakeDesktopNativeViewLayoutTarget(
   var removeLayoutChangedListenerCount = 0
     private set
   var revalidateCount = 0
+    private set
+  var nativeViewSizeSynchronizationCount = 0
     private set
   var immediatePaintCount = 0
     private set
@@ -237,6 +265,11 @@ private class FakeDesktopNativeViewLayoutTarget(
   override fun revalidate() {
     revalidateCount++
     synchronizationOperations += "revalidate"
+  }
+
+  override fun synchronizeNativeViewSize() {
+    nativeViewSizeSynchronizationCount++
+    synchronizationOperations += "synchronizeNativeViewSize"
   }
 
   override fun paintImmediately() {
