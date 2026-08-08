@@ -6,6 +6,8 @@ import java.awt.event.ComponentEvent
 import java.awt.event.HierarchyBoundsAdapter
 import java.awt.event.HierarchyEvent
 import java.awt.event.HierarchyListener
+import java.awt.geom.AffineTransform
+import java.awt.image.BufferedImage
 import javax.swing.JComponent
 import javax.swing.SwingUtilities
 import javax.swing.Timer
@@ -152,8 +154,9 @@ internal class ComponentDesktopNativeViewLayoutTarget(
   /**
    * 同步绘制 JCEF 暴露的 JPanel，触发其内部的 `doUpdate()` 与原生浏览器子窗口绑定。
    *
-   * JCEF windowed 模式下普通 [repaint] 只会异步请求 Swing 绘制，Compose `SwingPanel` 的首次挂载可能不会立刻
-   * 进入 `paint()`；这里仅在 Swing EDT 和可见有效边界内强制执行一次。
+   * Compose `SwingPanel` 的首次 [JComponent.paintImmediately] 不保证会实际调用嵌入组件重写的 `paint()`；
+   * 而 JCEF 恰好在该方法中安排带原生父窗口的浏览器创建。因此在正常的立即绘制请求之后，再使用极小的离屏
+   * Graphics 明确执行一次真实绘制。JCEF 使用组件自身的可见区域计算布局，离屏图像尺寸不会影响浏览器尺寸。
    */
   override fun paintImmediately() {
     check(SwingUtilities.isEventDispatchThread()) {
@@ -164,7 +167,13 @@ internal class ComponentDesktopNativeViewLayoutTarget(
     if (!component.isDisplayable || !component.isShowing || width <= 0 || height <= 0) {
       return
     }
-    (component as? JComponent)?.paintImmediately(0, 0, width, height) ?: component.repaint()
+    val swingComponent = component as? JComponent
+    if (swingComponent == null) {
+      component.repaint()
+      return
+    }
+    swingComponent.paintImmediately(0, 0, width, height)
+    JcefInitialPaintDispatcher.paint(swingComponent)
   }
 
   override fun repaint() {
@@ -177,6 +186,28 @@ internal class ComponentDesktopNativeViewLayoutTarget(
     val componentListener: ComponentAdapter,
     val hierarchyBoundsListener: HierarchyBoundsAdapter,
   )
+}
+
+/**
+ * 显式调用 JCEF Windowed 组件的 [JComponent.paint]。
+ *
+ * JCEF 的内部 `delayedUpdate` 会在本次绘制后以当前 macOS 原生窗口句柄创建浏览器。不能使用
+ * `createImmediately()` 兜底，否则浏览器可能在未绑定父窗口时创建，并再次退化为只能在窗口 resize 后显示。
+ */
+internal object JcefInitialPaintDispatcher {
+  fun paint(component: JComponent) {
+    val image = BufferedImage(1, 1, BufferedImage.TYPE_INT_ARGB)
+    val graphics = image.createGraphics()
+    try {
+      graphics.transform = component.graphicsConfiguration
+        ?.defaultTransform
+        ?.let(::AffineTransform)
+        ?: AffineTransform()
+      component.paint(graphics)
+    } finally {
+      graphics.dispose()
+    }
+  }
 }
 
 /**

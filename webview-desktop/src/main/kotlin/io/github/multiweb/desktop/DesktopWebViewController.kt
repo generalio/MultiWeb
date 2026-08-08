@@ -36,7 +36,6 @@ import kotlinx.coroutines.flow.asStateFlow
 import java.awt.Component
 import java.util.concurrent.ConcurrentHashMap
 import javax.swing.SwingUtilities
-import javax.swing.Timer
 import org.cef.CefApp
 import org.cef.CefClient
 import org.cef.browser.CefBrowser
@@ -179,17 +178,9 @@ class DesktopWebViewController(
       isControllerDisposed = { isDisposed },
       createBrowser = {
         isBrowserCreationStarted = true
-        // `createImmediately()` 会以无原生父窗口的参数创建浏览器。先触发 JCEF 视图绘制，JCEF 的内部延迟
-        // 更新会携带当前 macOS 原生窗口句柄创建浏览器；仅在该路径没有产生回调时再使用旧路径兜底。
+        // JCEF Windowed 浏览器必须由视图绘制后的内部延迟更新创建；该路径会携带当前 macOS 原生窗口句柄。
+        // 禁止调用 createImmediately()，其无父窗口创建路径会导致首帧直到窗口 resize 才重新绑定并显示。
         nativeViewTarget.paintImmediately()
-        Timer(BROWSER_CREATION_FALLBACK_DELAY_MILLIS) {
-          if (!isDisposed && !isBrowserReady) {
-            browser.createImmediately()
-          }
-        }.apply {
-          isRepeats = false
-          start()
-        }
       },
     )
     initialNativeViewLayoutCoordinator = DesktopInitialNativeViewLayoutCoordinator(
@@ -804,8 +795,6 @@ class DesktopWebViewController(
     }
   }
 }
-
-private const val BROWSER_CREATION_FALLBACK_DELAY_MILLIS = 300
 
 /** 统一执行 JCEF 的非强制浏览器关闭顺序，供桌面控制器及回归测试复用。 */
 internal fun closeDesktopBrowser(browser: CefBrowser) {
