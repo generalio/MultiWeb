@@ -38,6 +38,14 @@ internal interface DesktopNativeViewLayoutTarget {
   /** 请求 AWT 重新执行布局。 */
   fun revalidate()
 
+  /**
+   * 以当前边界重新设置原生视图尺寸。
+   *
+   * JCEF 的 windowed 视图会在自身的 `setBounds()` 中将尺寸同步给 Chromium。Compose SwingPanel
+   * 可能在浏览器创建前已经完成过一次布局，因此首次原生浏览器就绪后需要无尺寸变化地重新执行该路径。
+   */
+  fun synchronizeNativeViewSize()
+
   /** 同步进入原生 Swing 视图的绘制流程。 */
   fun paintImmediately()
 
@@ -107,6 +115,10 @@ internal class ComponentDesktopNativeViewLayoutTarget(
 
   override fun revalidate() {
     component.revalidate()
+  }
+
+  override fun synchronizeNativeViewSize() {
+    component.setBounds(component.bounds)
   }
 
   /**
@@ -301,6 +313,7 @@ internal class DesktopInitialNativeViewLayoutCoordinator(
     isSynchronizing = true
     try {
       target.revalidate()
+      target.synchronizeNativeViewSize()
       target.paintImmediately()
       target.repaint()
       isInitialLayoutSynchronized = true

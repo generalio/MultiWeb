@@ -93,6 +93,8 @@ private class FakeAttachmentTarget(
 
   override fun revalidate() = Unit
 
+  override fun synchronizeNativeViewSize() = Unit
+
   override fun paintImmediately() = Unit
 
   override fun repaint() = Unit
