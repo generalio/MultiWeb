@@ -1,0 +1,73 @@
+{
+  "schemaVersion": 1,
+  "taskId": "MW-20260817-001",
+  "baselineSha": "645e0bfe043b17a3db22cfaef080914e9e1fe6d8",
+  "tasks": [
+    {
+      "id": "workflow-framework",
+      "owner": "WORKFLOW_IMPLEMENTERS",
+      "scope": [
+        ".codex/agents/",
+        ".codex/workflow/",
+        "tools/agent_workflow.py",
+        "tools/tests/",
+        "AGENTS.md",
+        "docs/agent-workflow.md",
+        "docs/agent-workflow-task-template.md",
+        ".github/pull_request_template.md",
+        ".github/workflows/pr-governance.yml"
+      ],
+      "dependsOn": [],
+      "verification": [
+        "PYTHONDONTWRITEBYTECODE=1 python3 -m unittest tools.tests.test_agent_workflow -v",
+        "git diff --check 645e0bf...b56d13c"
+      ]
+    },
+    {
+      "id": "desktop-close-race",
+      "owner": "DESKTOP_IMPLEMENTER",
+      "scope": [
+        "webview-desktop/src/main/",
+        "webview-desktop/src/test/"
+      ],
+      "dependsOn": [],
+      "verification": [
+        "./gradlew :webview-desktop:test --no-daemon"
+      ]
+    },
+    {
+      "id": "ios-file-chooser-boundary",
+      "owner": "IOS_IMPLEMENTER",
+      "scope": [
+        "webview-ios/src/iosMain/",
+        "webview-ios/src/iosTest/"
+      ],
+      "dependsOn": [],
+      "verification": [
+        "./gradlew :webview-ios:compileTestKotlinIosSimulatorArm64 --no-daemon"
+      ]
+    },
+    {
+      "id": "fixed-candidate-review",
+      "owner": "VERIFY_REVIEWER",
+      "scope": [
+        "固定候选 b56d13c3f02b4aaa2866c482f3fa8fe63920dfb0"
+      ],
+      "dependsOn": [
+        "workflow-framework",
+        "desktop-close-race",
+        "ios-file-chooser-boundary"
+      ],
+      "verification": [
+        "./gradlew apiCheck --no-daemon",
+        "./gradlew :webview-android:assembleRelease --no-daemon",
+        "./gradlew :sample-compose:compileKotlinJs :sample-compose:compileKotlinWasmJs --no-daemon"
+      ]
+    }
+  ],
+  "acceptanceCriteria": [
+    "固定候选通过 Verify-Reviewer 审查且无 P0/P1。",
+    "候选提交、审查报告和状态账本形成可验证证据链。",
+    "PR 正文包含全部平台和公共 API 的验证证据。"
+  ]
+}
