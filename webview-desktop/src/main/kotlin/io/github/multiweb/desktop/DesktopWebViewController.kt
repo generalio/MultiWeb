@@ -126,8 +126,11 @@ class DesktopWebViewController(
   /** 等待 JCEF 与 Swing 均就绪后同步 windowed 原生浏览器的首次布局。 */
   private lateinit var initialNativeViewLayoutCoordinator: DesktopInitialNativeViewLayoutCoordinator
 
-  /** 已请求 JCEF 创建后才可以请求浏览器的正常关闭路径。 */
-  private var isBrowserCreationStarted = false
+  /** 协调 JCEF 创建确认与释放请求，防止创建回调前提前关闭浏览器。 */
+  private val browserCloseLifecycle = DesktopBrowserCloseLifecycle(
+    closeCreatedBrowser = ::closeBrowser,
+    disposeUncreatedBrowser = ::disposeUncreatedBrowser,
+  )
 
   /** 控制器是否已释放。释放后除 [dispose] 外的操作都会抛出 [IllegalStateException]。 */
   @Volatile
@@ -177,7 +180,7 @@ class DesktopWebViewController(
       target = nativeViewTarget,
       isControllerDisposed = { isDisposed },
       createBrowser = {
-        isBrowserCreationStarted = true
+        browserCloseLifecycle.onBrowserCreationStarted()
         // JCEF Windowed 浏览器必须由视图绘制后的内部延迟更新创建；该路径会携带当前 macOS 原生窗口句柄。
         // 禁止调用 createImmediately()，其无父窗口创建路径会导致首帧直到窗口 resize 才重新绑定并显示。
         nativeViewTarget.paintImmediately()
@@ -288,11 +291,7 @@ class DesktopWebViewController(
     activeFileChoosers.forEach(DesktopFileChooserCallbackGuard::cancel)
     activeFileChoosers.clear()
     scriptBridgeInstallation.dispose()
-    if (isBrowserCreationStarted) {
-      closeBrowser()
-    } else {
-      disposeUncreatedBrowser()
-    }
+    browserCloseLifecycle.dispose()
     state = state.copy(isLoading = false)
   }
 
@@ -366,8 +365,10 @@ class DesktopWebViewController(
           if (createdBrowser !== browser) {
             return@invokeLater
           }
+          if (!browserCloseLifecycle.onBrowserCreated()) {
+            return@invokeLater
+          }
           if (isDisposed) {
-            closeBrowser()
             return@invokeLater
           }
           isBrowserReady = true
@@ -793,6 +794,65 @@ class DesktopWebViewController(
     check(SwingUtilities.isEventDispatchThread()) {
       "DesktopWebViewController 必须在 Swing EDT 中调用。"
     }
+  }
+}
+
+/**
+ * 协调原生浏览器创建与控制器释放的关闭状态。
+ *
+ * `createBrowser` 只表示 JCEF 已收到创建请求，原生浏览器仍可能尚未完成创建。此时释放控制器必须等待
+ * `onAfterCreated`，再通过正常关闭路径等待 `onBeforeClose` 释放客户端并通知宿主。未发起创建请求时则没有
+ * `onBeforeClose` 回调，必须立即走未创建浏览器的释放路径。
+ *
+ * 调用方必须在 Swing EDT 串行调用所有方法。
+ */
+internal class DesktopBrowserCloseLifecycle(
+  private val closeCreatedBrowser: () -> Unit,
+  private val disposeUncreatedBrowser: () -> Unit,
+) {
+  private var isBrowserCreationStarted = false
+  private var isBrowserCreated = false
+  private var isDisposed = false
+  private var isCreatedBrowserCloseRequested = false
+
+  /** 标记 JCEF 创建请求已发出；这不代表原生浏览器已可关闭。 */
+  fun onBrowserCreationStarted() {
+    isBrowserCreationStarted = true
+  }
+
+  /**
+   * 标记 JCEF 已确认创建原生浏览器。
+   *
+   * 返回 `true` 仅表示首次确认，调用方据此执行首次创建后的初始化；重复回调不会重复关闭或初始化。
+   */
+  fun onBrowserCreated(): Boolean {
+    if (isBrowserCreated) {
+      return false
+    }
+    isBrowserCreated = true
+    requestCreatedBrowserCloseIfNeeded()
+    return true
+  }
+
+  /** 请求释放；创建中的浏览器会延迟到 [onBrowserCreated] 后正常关闭。 */
+  fun dispose() {
+    if (isDisposed) {
+      return
+    }
+    isDisposed = true
+    if (isBrowserCreationStarted) {
+      requestCreatedBrowserCloseIfNeeded()
+    } else {
+      disposeUncreatedBrowser()
+    }
+  }
+
+  private fun requestCreatedBrowserCloseIfNeeded() {
+    if (!isDisposed || !isBrowserCreated || isCreatedBrowserCloseRequested) {
+      return
+    }
+    isCreatedBrowserCloseRequested = true
+    closeCreatedBrowser()
   }
 }
 
