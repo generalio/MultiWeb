@@ -1,0 +1,3 @@
+{"actor":"SUPERVISOR","at":"2026-08-17T06:00:00+08:00","evidence":"task-contract.md","from":"PLANNED","summary":"开始实施","to":"IMPLEMENTING"}
+{"actor":"IMPLEMENTER","at":"2026-08-17T07:00:00+08:00","evidence":"handoffs/implementer.md","from":"IMPLEMENTING","summary":"提交交接","to":"READY_TO_INTEGRATE"}
+{"actor":"INTEGRATOR","at":"2026-08-17T08:00:00+08:00","evidence":"candidate.sha","from":"READY_TO_INTEGRATE","summary":"固定候选","to":"VALIDATING"}

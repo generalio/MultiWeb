@@ -1,0 +1,2 @@
+{"actor":"SUPERVISOR","at":"2026-08-17T09:00:00+08:00","evidence":"task-contract.md","from":"PLANNED","summary":"开始实施","to":"IMPLEMENTING"}
+{"actor":"SUPERVISOR","at":"2026-08-17T10:00:00+08:00","evidence":"task-contract.md","from":"IMPLEMENTING","summary":"等待维护者授权","to":"PAUSED"}

@@ -1,0 +1,20 @@
+{
+  "schemaVersion": 1,
+  "taskId": "MW-20260817-004",
+  "baselineSha": "b777d0fba4f598028469ecc00780530555aa7003",
+  "status": "PAUSED",
+  "mode": "FULL",
+  "currentStage": "IMPLEMENTING",
+  "attempts": {
+    "PLANNING": 1,
+    "IMPLEMENTING": 1,
+    "VALIDATING": 0,
+    "REVIEWING": 0
+  },
+  "candidateSha": null,
+  "pausedFromStatus": "IMPLEMENTING",
+  "verdict": null,
+  "nextAction": "恢复 IMPLEMENTING 阶段并等待维护者授权",
+  "lastEventAt": "2026-08-17T10:00:00+08:00",
+  "stopReason": "等待维护者授权"
+}
