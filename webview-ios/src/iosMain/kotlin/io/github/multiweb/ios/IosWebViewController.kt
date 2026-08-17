@@ -125,8 +125,8 @@ class IosWebViewController(
 
   override val stateFlow: StateFlow<WebViewState> = mutableState.asStateFlow()
 
-  /** 当前尚未完成的 WebKit 文件选择回调；控制器释放时必须显式取消。 */
-  private var activeFileChooserCompletion: ((List<*>?) -> Unit)? = null
+  /** 文件选择器状态仅在主线程更新；实际宿主回调统一回到主线程后交给该协调器。 */
+  private val fileChooserCoordinator = IosFileChooserCoordinator()
 
   init {
     checkMainThread()
@@ -233,8 +233,7 @@ class IosWebViewController(
     extensions.filterIsInstance<WebViewControllerLifecycleExtension>().forEach { extension ->
       extension.onControllerDisposed()
     }
-    activeFileChooserCompletion?.invoke(null)
-    activeFileChooserCompletion = null
+    fileChooserCoordinator.dispose()
     view.stopLoading()
     view.navigationDelegate = null
     view.UIDelegate = null
@@ -348,20 +347,23 @@ class IosWebViewController(
     parameters: WKOpenPanelParameters,
     completionHandler: (List<*>?) -> Unit,
   ) {
-    activeFileChooserCompletion?.invoke(null)
-    activeFileChooserCompletion = completionHandler
     val request = WebFileChooserRequest(
       allowMultipleSelection = parameters.allowsMultipleSelection,
       allowDirectories = parameters.allowsDirectories,
     )
     val handler = fileChooserHandler
+    val requestId = fileChooserCoordinator.start(
+      request = request,
+      hasHandler = handler != null,
+    ) { selectedUris ->
+      completionHandler(selectedUris?.map { uri -> NSURL(string = uri) })
+    }
     if (handler == null) {
-      completeFileChooser(completionHandler, request, WebFileChooserResult.Cancelled)
       return
     }
 
     fun complete(result: WebFileChooserResult) {
-      completeFileChooser(completionHandler, request, result)
+      completeFileChooser(requestId, result)
     }
     try {
       handler.onFileChooserRequested(request, ::complete)
@@ -371,39 +373,14 @@ class IosWebViewController(
     }
   }
 
-  /** 在主线程且仅针对仍活跃的请求回传一次文件选择结果。 */
+  /** 将宿主完成结果切回主线程；协调器会拒绝已替换或已释放请求的迟到回调。 */
   private fun completeFileChooser(
-    completionHandler: (List<*>?) -> Unit,
-    request: WebFileChooserRequest,
+    requestId: Long,
     result: WebFileChooserResult,
   ) {
     dispatch_async(dispatch_get_main_queue()) {
-      if (activeFileChooserCompletion !== completionHandler) {
-        return@dispatch_async
-      }
-      activeFileChooserCompletion = null
-      completionHandler(if (isDisposed) null else result.toIosUrls(request))
+      fileChooserCoordinator.complete(requestId, result)
     }
-  }
-
-  /** iOS 仅将绝对 `file://` URI 回传给 WebKit，远程或多余文件都会取消整次请求。 */
-  private fun WebFileChooserResult.toIosUrls(request: WebFileChooserRequest): List<NSURL>? {
-    val selected = this as? WebFileChooserResult.Selected ?: return null
-    if (!request.allowMultipleSelection && selected.uris.size > 1) {
-      return null
-    }
-    val urls = selected.uris.map { uri -> NSURL(string = uri) }
-    if (
-      urls.any { url ->
-        !url.isFileURL() ||
-          url.path?.startsWith("/") != true ||
-          url.query != null ||
-          url.fragment != null
-      }
-    ) {
-      return null
-    }
-    return urls
   }
 
   private fun handlePageStarted() {
