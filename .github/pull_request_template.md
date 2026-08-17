@@ -8,10 +8,10 @@
 
 ## 平台影响
 
-- Android：
-- iOS：
-- Desktop：
-- JS/Wasm：
+- Android：受影响 / 不受影响；验证证据：
+- iOS：受影响 / 不受影响；验证证据：
+- Desktop：受影响 / 不受影响；验证证据：
+- JS/Wasm：受影响 / 不受影响；验证证据：
 
 ## 验证命令与结果
 
@@ -21,6 +21,15 @@
 
 <!-- 无风险时明确写“无”。安全、JS 桥、Cookie、文件访问或外部导航改动必须说明默认行为和安全影响。 -->
 
+- 公共 API：受影响 / 不受影响；验证证据：
+
 ## 文档变更
 
 <!-- 列出更新的 README、docs 或代码 KDoc；不需要更新时说明原因。 -->
+
+## Agent 工作流记录
+
+- 任务契约路径：`.codex/workflow/runs/<task-id>/task-contract.md`
+- 候选提交 SHA：`<40 位 SHA>`
+- 账本验证：`PASS`
+- 审查裁决：`PASS`

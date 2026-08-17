@@ -13,11 +13,10 @@ on:
 
 permissions:
   contents: read
-  pull-requests: read
 
 jobs:
   governance:
-    name: 分支与开发记录
+    name: 分支、工作流账本与开发记录
     runs-on: ubuntu-latest
 
     steps:
@@ -32,4 +31,236 @@ jobs:
               core.setFailed(
                 `源分支必须匹配 generalio/<类型>/<主题>，当前为：${branch}。允许的类型：feature、fix、docs、chore、refactor、test。`,
               );
+            }
+
+      - name: 校验 PR 正文的工作流记录
+        id: workflow_record
+        uses: actions/github-script@v7
+        env:
+          PR_BODY: ${{ github.event.pull_request.body }}
+        with:
+          script: |
+            const body = process.env.PR_BODY ?? "";
+            const requiredSections = [
+              "目的",
+              "改动内容",
+              "平台影响",
+              "验证命令与结果",
+              "风险与兼容性",
+              "文档变更",
+              "Agent 工作流记录",
+            ];
+
+            const escapeRegExp = (value) => value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+            const fail = (message) => core.setFailed(`PR 正文工作流记录无效：${message}`);
+            const withoutComments = (value) => value.replace(/<!--[\s\S]*?-->/g, "").trim();
+            const withoutInlineCode = (value) => value.replace(/`/g, "").trim();
+            const isPlaceholder = (value) => {
+              const normalized = withoutInlineCode(withoutComments(value));
+              return (
+                !normalized ||
+                /^(?:TODO|TBD|待填写|<[^>]+>|\[填写[^\]]*\])$/i.test(normalized)
+              );
+            };
+
+            function section(title) {
+              const heading = new RegExp(`^##\\s+${escapeRegExp(title)}\\s*$`, "m");
+              const match = heading.exec(body);
+              if (!match) {
+                fail(`缺少“${title}”章节。`);
+                return "";
+              }
+              const nextHeading = /^##\s+/m;
+              const afterHeading = body.slice(match.index + match[0].length);
+              const nextMatch = nextHeading.exec(afterHeading);
+              const content = (nextMatch ? afterHeading.slice(0, nextMatch.index) : afterHeading).trim();
+              if (isPlaceholder(content)) {
+                fail(`“${title}”章节为空或仍是模板占位符。`);
+              }
+              return content;
+            }
+
+            for (const title of requiredSections) {
+              section(title);
+            }
+
+            function singleRecord(label) {
+              const record = new RegExp(
+                `^\\s*-\\s*${escapeRegExp(label)}\\s*[:：]\\s*(.+?)\\s*$`,
+                "gmi",
+              );
+              const matches = [...body.matchAll(record)];
+              if (matches.length !== 1 || isPlaceholder(matches[0]?.[1] ?? "")) {
+                fail(`必须且只能填写一项“${label}”。`);
+                return "";
+              }
+              return withoutInlineCode(matches[0][1]);
+            }
+
+            const contractPath = singleRecord("任务契约路径");
+            const candidateSha = singleRecord("候选提交 SHA").toLowerCase();
+            const ledgerResult = singleRecord("账本验证").toUpperCase();
+            const reviewVerdict = singleRecord("审查裁决").toUpperCase();
+            const contractMatch = /^\.codex\/workflow\/runs\/([A-Za-z0-9][A-Za-z0-9_.-]{2,127})\/task-contract\.md$/.exec(contractPath);
+
+            if (!contractMatch) {
+              fail("任务契约路径必须是 `.codex/workflow/runs/<task-id>/task-contract.md`。");
+            }
+            if (!/^[0-9a-f]{40}$/.test(candidateSha)) {
+              fail("候选提交 SHA 必须是 40 位十六进制提交标识。");
+            }
+            if (ledgerResult !== "PASS") {
+              fail("账本验证必须为 PASS。");
+            }
+            if (reviewVerdict !== "PASS") {
+              fail("审查裁决必须为 PASS。");
+            }
+            if (contractMatch && /^[0-9a-f]{40}$/.test(candidateSha) && ledgerResult === "PASS" && reviewVerdict === "PASS") {
+              core.setOutput("run-directory", `.codex/workflow/runs/${contractMatch[1]}`);
+              core.setOutput("candidate-sha", candidateSha);
+            }
+
+      - name: 检出 PR 头提交
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: 校验 Agent 工作流账本
+        env:
+          RUN_DIRECTORY: ${{ steps.workflow_record.outputs.run-directory }}
+        run: python3 tools/agent_workflow.py validate "$RUN_DIRECTORY"
+
+      - name: 校验候选提交、审查报告与验证证据
+        uses: actions/github-script@v7
+        env:
+          PR_BODY: ${{ github.event.pull_request.body }}
+          RUN_DIRECTORY: ${{ steps.workflow_record.outputs.run-directory }}
+          CANDIDATE_SHA: ${{ steps.workflow_record.outputs.candidate-sha }}
+        with:
+          script: |
+            const fs = require("fs");
+            const childProcess = require("child_process");
+            const body = process.env.PR_BODY ?? "";
+            const runDirectory = process.env.RUN_DIRECTORY ?? "";
+            const candidateSha = process.env.CANDIDATE_SHA ?? "";
+            const fail = (message) => core.setFailed(`PR 工作流证据无效：${message}`);
+            const withoutComments = (value) => value.replace(/<!--[\s\S]*?-->/g, "").trim();
+            const withoutInlineCode = (value) => value.replace(/`/g, "").trim();
+            const escapeRegExp = (value) => value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+            const isPlaceholder = (value) => {
+              const normalized = withoutInlineCode(withoutComments(value));
+              return !normalized || /^(?:TODO|TBD|待填写|<[^>]+>|\[填写[^\]]*\])$/i.test(normalized);
+            };
+
+            function singleRecord(text, label, source) {
+              const record = new RegExp(
+                `^\\s*-\\s*${escapeRegExp(label)}\\s*[:：]\\s*(.+?)\\s*$`,
+                "gmi",
+              );
+              const matches = [...text.matchAll(record)];
+              if (matches.length !== 1 || isPlaceholder(matches[0]?.[1] ?? "")) {
+                fail(`${source} 必须且只能填写一项“${label}”。`);
+                return "";
+              }
+              return withoutInlineCode(matches[0][1]);
+            }
+
+            function validationRecord(text, label, source) {
+              const record = new RegExp(
+                `^\\s*-\\s*${escapeRegExp(label)}\\s*[:：]\\s*(受影响|不受影响)\\s*[；;]\\s*验证证据\\s*[:：]\\s*(.+?)\\s*$`,
+                "gmi",
+              );
+              const matches = [...text.matchAll(record)];
+              if (matches.length !== 1 || isPlaceholder(matches[0]?.[2] ?? "")) {
+                fail(`${source} 必须按“${label}：受影响/不受影响；验证证据：...”填写一次。`);
+                return { impact: "", evidence: "" };
+              }
+              return { impact: matches[0][1], evidence: withoutInlineCode(matches[0][2]) };
+            }
+
+            function requireEvidence(record, label, source, requirePassingResult) {
+              const evidence = withoutComments(record.evidence);
+              const noEvidence = /^(?:不适用|无|不涉及|未执行|未验证|N\/?A|none|not applicable)[。.]?$/i;
+              if (noEvidence.test(evidence) || evidence === "不受影响") {
+                fail(`${source} 的“${label}”验证证据不能只是“不适用”或空泛结论。`);
+                return;
+              }
+              if (record.impact === "受影响") {
+                if (/(?:不适用|不涉及|N\/?A|none|not applicable)(?:$|[，、；;。])/i.test(evidence)) {
+                  fail(`${source} 标记“${label}”受影响时不能填写不适用。`);
+                }
+                if (requirePassingResult && !/(?:通过|PASS|passed|success|exit\s*code\s*0|退出码\s*[:：]?\s*0)/i.test(evidence)) {
+                  fail(`${source} 标记“${label}”受影响时必须记录实际通过的命令或替代验证结果。`);
+                }
+              }
+            }
+
+            function parseImpactRecords(text, source, requirePassingResult) {
+              const labels = ["公共 API", "Android", "iOS", "Desktop", "JS/Wasm"];
+              const records = new Map();
+              for (const label of labels) {
+                const record = validationRecord(text, label, source);
+                requireEvidence(record, label, source, requirePassingResult);
+                records.set(label, record);
+              }
+              return records;
+            }
+
+            let state;
+            let contract;
+            let report;
+            try {
+              state = JSON.parse(fs.readFileSync(`${runDirectory}/state.json`, "utf8"));
+              contract = fs.readFileSync(`${runDirectory}/task-contract.md`, "utf8");
+              report = fs.readFileSync(`${runDirectory}/review-report.md`, "utf8");
+            } catch (error) {
+              fail(`无法读取账本证据：${error.message}`);
+              return;
+            }
+
+            try {
+              childProcess.execFileSync("git", ["merge-base", "--is-ancestor", candidateSha, "HEAD"], { stdio: "ignore" });
+            } catch {
+              fail("候选提交 SHA 不是当前 PR HEAD 的祖先。");
+            }
+            if (state.status !== "PR_READY" || state.verdict !== "PASS") {
+              fail("账本必须处于 PR_READY 且 state.json.verdict 为 PASS。");
+            }
+            if (typeof state.candidateSha !== "string" || state.candidateSha.toLowerCase() !== candidateSha) {
+              fail("state.json.candidateSha 与 PR 正文的候选提交 SHA 不一致。");
+            }
+
+            const reviewedCandidates = [...report.matchAll(/^\s*(?:候选\s*SHA|candidate\s*sha)\s*[:：]\s*([0-9a-f]{7,64})\s*$/gim)];
+            const reportVerdicts = [...report.matchAll(/^\s*(?:裁决|verdict)\s*[:：]\s*(PASS|REJECT)\s*$/gim)];
+            if (reviewedCandidates.length !== 1 || reviewedCandidates[0][1].toLowerCase() !== candidateSha) {
+              fail("review-report.md 的候选 SHA 必须与账本和 PR 正文一致。");
+            }
+            if (reportVerdicts.length !== 1 || reportVerdicts[0][1] !== "PASS") {
+              fail("review-report.md 的裁决必须与账本一致且为 PASS。");
+            }
+
+            const unresolvedFindings = new Set();
+            for (const clause of report.split(/[,，、;；。\n]/)) {
+              for (const finding of clause.matchAll(/\b(P[01])\b/gi)) {
+                const name = finding[1].toUpperCase();
+                const escapedName = escapeRegExp(name);
+                const negated = new RegExp(`(?:无|没有|no|none)\\s*(?:未解决的?\\s*)?${escapedName}\\b`, "i").test(clause);
+                const resolved = new RegExp(`\\b${escapedName}\\b\\s*[:：-]?\\s*(?:已(?:修复|解决|关闭)|resolved|fixed|closed)\\b`, "i").test(clause);
+                if (!negated && !resolved) {
+                  unresolvedFindings.add(name);
+                }
+              }
+            }
+            if (unresolvedFindings.size > 0) {
+              fail(`review-report.md 含未解决 ${[...unresolvedFindings].join("、")}，不能进入 PR。`);
+            }
+
+            const prRecords = parseImpactRecords(body, "PR 正文", true);
+            const contractRecords = parseImpactRecords(contract, "任务契约", false);
+            for (const [label, prRecord] of prRecords) {
+              if (prRecord.impact !== contractRecords.get(label).impact) {
+                fail(`“${label}”受影响标记必须与任务契约一致。`);
+              }
             }
