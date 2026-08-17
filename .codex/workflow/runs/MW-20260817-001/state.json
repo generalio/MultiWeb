@@ -1,0 +1,20 @@
+{
+  "schemaVersion": 1,
+  "taskId": "MW-20260817-001",
+  "baselineSha": "645e0bfe043b17a3db22cfaef080914e9e1fe6d8",
+  "status": "PR_READY",
+  "mode": "FULL",
+  "currentStage": "PR",
+  "attempts": {
+    "PLANNING": 1,
+    "IMPLEMENTING": 1,
+    "VALIDATING": 1,
+    "REVIEWING": 1
+  },
+  "candidateSha": "b56d13c3f02b4aaa2866c482f3fa8fe63920dfb0",
+  "verdict": "PASS",
+  "nextAction": "维护者推送当前分支后，使用 pr-body.md 创建远程 PR",
+  "lastEventAt": "2026-08-17T13:45:24.521050+00:00",
+  "stopReason": null,
+  "reviewedCandidateSha": "b56d13c3f02b4aaa2866c482f3fa8fe63920dfb0"
+}

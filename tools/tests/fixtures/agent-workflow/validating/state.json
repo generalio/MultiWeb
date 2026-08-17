@@ -1,0 +1,19 @@
+{
+  "schemaVersion": 1,
+  "taskId": "MW-20260817-005",
+  "baselineSha": "b777d0fba4f598028469ecc00780530555aa7003",
+  "status": "VALIDATING",
+  "mode": "FULL",
+  "currentStage": "VALIDATING",
+  "attempts": {
+    "PLANNING": 1,
+    "IMPLEMENTING": 1,
+    "VALIDATING": 1,
+    "REVIEWING": 0
+  },
+  "candidateSha": "b777d0fba4f598028469ecc00780530555aa7003",
+  "verdict": null,
+  "nextAction": "等待 Verify-Reviewer 审查",
+  "lastEventAt": "2026-08-17T08:00:00+08:00",
+  "stopReason": null
+}
