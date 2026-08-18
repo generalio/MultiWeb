@@ -2,6 +2,11 @@
 
 > 未填写字段不得以“默认”或口头说明替代；契约完整并初始化账本后才能进入 `IMPLEMENTING`。
 
+> 默认不得生成或要求 `handoffs/` 阶段交接文档。只有维护者明确指出上下文超出并要求时，
+> 才允许创建并引用该目录中的文件。任务契约、计划、候选 SHA 和审查报告
+> 属于账本或门禁证据，
+> 不属于交接文档。
+
 ## 基本信息
 
 - 任务编号：
@@ -14,7 +19,7 @@
 
 ## 计划与所有权
 
-| Agent | 独占文件或模块 | 前置依赖 | 交接产物 | 最小验证 |
+| Agent | 独占文件或模块 | 前置依赖 | 返回的阶段信息 | 最小验证 |
 | --- | --- | --- | --- | --- |
 |  |  |  |  |  |
 
@@ -50,6 +55,12 @@
 
 `plan.json` 至少包含 `schemaVersion`、`taskId`、`baselineSha`、任务 DAG、独占范围、依赖、验证命令和验收标准。
 
+进入 `PAUSED` 或 `BLOCKED` 时，Supervisor 必须同时传入非空单行的 `--stop-reason` 和
+`--next-action`；其他状态传入任一停止参数必须失败且不写账本。普通阶段
+使用 `task-contract.md`，
+`VALIDATING` 使用 `candidate.sha`，`REVIEWED`、`COMMIT_READY`、`PR_READY` 和返工使用
+`review-report.md`。
+
 ## 验收与验证
 
 - 实施阶段命令：
@@ -57,9 +68,9 @@
 - 无法执行的运行时范围、原因和替代证据：
 - 公共 API 变更时的 `./gradlew apiCheck` 结果：
 
-## 交接与裁决
+## 阶段信息与裁决
 
-- 实施 Agent：修改文件、worktree/diff、命令结果、风险：
-- Integrator：合并交接项、机械冲突、候选 SHA、`git diff --check`：
+- 实施 Agent 返回：修改文件、worktree/diff、命令结果、风险：
+- Integrator 返回：合并改动、机械冲突、候选 SHA、`git diff --check`：
 - Verify-Reviewer：审查 SHA、命令结果、未验证范围、P0/P1/P2、`PASS` / `REJECT`：
 - PR 记录：任务契约路径、候选提交 SHA、账本验证 `PASS`、审查裁决 `PASS` 及平台验证证据：

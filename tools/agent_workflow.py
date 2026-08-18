@@ -77,6 +77,7 @@ REQUIRED_STATE_FIELDS = (
 )
 
 ATTEMPT_FIELDS = ("PLANNING", "IMPLEMENTING", "VALIDATING", "REVIEWING")
+STOPPED_STATUSES = frozenset({"PAUSED", "BLOCKED"})
 
 EVENT_FIELDS = ("at", "actor", "from", "to", "evidence", "summary")
 
@@ -398,6 +399,30 @@ def resolve_evidence_path(run_directory: Path, evidence: Path) -> Path:
     return evidence_path
 
 
+def is_nonempty_single_line(value: object) -> bool:
+    """确认停止原因和下一步可直接写入单行账本字段。"""
+    return isinstance(value, str) and bool(value.strip()) and value.splitlines() == [value]
+
+
+def validate_stop_options(
+    run_directory: Path,
+    next_status: str,
+    stop_reason: str | None,
+    next_action: str | None,
+) -> None:
+    """限制停止参数只能用于需要停止上下文的状态。"""
+    if next_status in STOPPED_STATUSES:
+        if not is_nonempty_single_line(stop_reason) or not is_nonempty_single_line(next_action):
+            raise ValueError(
+                f"任务目录 {run_directory} 进入 PAUSED 或 BLOCKED 必须同时提供 "
+                "--stop-reason 和 --next-action，且均为非空单行。"
+            )
+    elif stop_reason is not None or next_action is not None:
+        raise ValueError(
+            f"任务目录 {run_directory} 仅在进入 PAUSED 或 BLOCKED 时接受 --stop-reason 和 --next-action。"
+        )
+
+
 def transition_run(
     run_directory: Path,
     next_status: str,
@@ -405,12 +430,15 @@ def transition_run(
     evidence: Path,
     candidate_sha: str | None,
     verdict: str | None,
+    stop_reason: str | None,
+    next_action: str | None,
 ) -> None:
     """验证状态迁移并原子更新当前账本，再追加审计事件。"""
     state = validate_run(run_directory)
     old_status = state["status"]
     if next_status not in STATUSES:
         raise ValueError(f"任务目录 {run_directory} 的目标状态 {next_status} 非法；请使用受支持的工作流状态。")
+    validate_stop_options(run_directory, next_status, stop_reason, next_action)
     if not is_allowed_transition(state, next_status):
         raise ValueError(
             f"任务目录 {run_directory} 不允许从 {old_status} 迁移到 {next_status}；请迁移到该状态允许的下一阶段。"
@@ -465,8 +493,14 @@ def transition_run(
     else:
         state.pop("pausedFromStatus", None)
         state["currentStage"] = STAGE_FOR_STATUS[next_status]
+    if next_status in STOPPED_STATUSES:
+        state["stopReason"] = stop_reason
+        state["nextAction"] = next_action
     state["status"] = next_status
     state["lastEventAt"] = next_event_time(state["lastEventAt"])
+    summary = "状态迁移已验证"
+    if next_status in STOPPED_STATUSES:
+        summary = f"停止原因：{stop_reason}；唯一下一步：{next_action}"
     append_event(
         run_directory,
         {
@@ -475,7 +509,7 @@ def transition_run(
             "from": old_status,
             "to": next_status,
             "evidence": evidence_path.relative_to(run_directory).as_posix(),
-            "summary": "状态迁移已验证",
+            "summary": summary,
         },
     )
     atomic_write_json(run_directory / "state.json", state)
@@ -647,6 +681,8 @@ def main() -> int:
     transition_parser.add_argument("--evidence", type=Path, required=True)
     transition_parser.add_argument("--candidate-sha")
     transition_parser.add_argument("--verdict", choices=("PASS", "REJECT"))
+    transition_parser.add_argument("--stop-reason")
+    transition_parser.add_argument("--next-action")
     resume_parser = subparsers.add_parser("resume")
     resume_parser.add_argument("run_directory", type=Path)
     arguments = parser.parse_args()
@@ -661,6 +697,12 @@ def main() -> int:
             return 0
         if arguments.command == "transition":
             run_directory = arguments.run_directory.resolve()
+            validate_stop_options(
+                run_directory,
+                arguments.next_status,
+                arguments.stop_reason,
+                arguments.next_action,
+            )
             with workflow_lock(run_directory):
                 transition_run(
                     run_directory,
@@ -669,6 +711,8 @@ def main() -> int:
                     arguments.evidence,
                     arguments.candidate_sha,
                     arguments.verdict,
+                    arguments.stop_reason,
+                    arguments.next_action,
                 )
             print(f"状态迁移成功：{run_directory} -> {arguments.next_status}")
             return 0

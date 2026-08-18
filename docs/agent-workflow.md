@@ -14,13 +14,18 @@ P0/P1、候选 SHA 变化或需要 GitHub/凭据授权时，Supervisor 必须暂
 每个任务使用 `.codex/workflow/runs/<task-id>/`，只保存公开的状态、相对证据路径和 Git SHA：
 
 ```text
-state.json  events.jsonl  task-contract.md  plan.json  handoffs/
+state.json  events.jsonl  task-contract.md  plan.json
 candidate.sha  review-report.md  resume.md
 ```
 
 `state.json` 使用 schemaVersion `1`，包含 `taskId`、`baselineSha`、`status`、`mode`、`currentStage`、`attempts`、
 `candidateSha`、`verdict`、`nextAction`、`lastEventAt` 和 `stopReason`；`PAUSED` 额外记录 `pausedFromStatus`。事件必须
 连续、时间严格递增，末事件时间必须等于 `lastEventAt`。
+
+默认不得生成或要求 `handoffs/` 阶段交接文档。只有维护者明确指出上下文超出并要求时，
+才允许创建并引用该目录中的文件。历史账本中的交接文件保留不删。任务契约、计划、
+候选 SHA
+和审查报告是账本或门禁证据，不属于交接文档。
 
 | 状态 | 可进入的下一状态 |
 | --- | --- |
@@ -41,17 +46,29 @@ python3 tools/agent_workflow.py validate .codex/workflow/runs/<task-id>
 python3 tools/agent_workflow.py transition .codex/workflow/runs/<task-id> <NEXT_STATUS> --actor <ROLE> --evidence <PATH>
 python3 tools/agent_workflow.py transition .codex/workflow/runs/<task-id> VALIDATING --actor INTEGRATOR --evidence candidate.sha --candidate-sha <SHA>
 python3 tools/agent_workflow.py transition .codex/workflow/runs/<task-id> REVIEWED --actor VERIFY_REVIEWER --evidence review-report.md --verdict PASS
+python3 tools/agent_workflow.py transition .codex/workflow/runs/<task-id> PAUSED \
+  --actor SUPERVISOR --evidence task-contract.md \
+  --stop-reason "<原因>" --next-action "<唯一下一步>"
 python3 tools/agent_workflow.py resume .codex/workflow/runs/<task-id>
 ```
+
+普通阶段迁移使用既有 `task-contract.md`；`VALIDATING` 使用 `candidate.sha`；`REVIEWED`、
+`COMMIT_READY`、`PR_READY` 和返工使用 `review-report.md`。进入 `PAUSED` 或 `BLOCKED` 时，
+`--stop-reason` 与 `--next-action` 必须同时为非空单行；其他目标状态携带任一停止参数
+必须失败，且 `state.json` 与 `events.jsonl` 不得变更。成功停止会把两项写入
+现有状态字段，并在事件摘要中记录。
 
 验证器只接受任务目录内常规证据文件，拒绝关键账本符号链接。它使用 Unix `fcntl` 非阻塞租约，要求 Python `>=3.11`；
 Windows 或不具备 `fcntl` 的环境应记录为验证限制。进入 `COMMIT_READY` 前必须存在同一候选 SHA 的 `candidate.sha`、
 `review-report.md`、`PASS` 及无未解决 P0/P1。
 
-## 交接与裁决
+## 阶段信息与裁决
 
-Implementer 交接必须包含任务/基线、实际修改文件与所有权映射、可应用 diff 或 worktree、命令退出结果、未验证范围，
-以及公共 API、平台差异和安全默认值影响。Integrator 必须检查交接范围不重叠并记录 `git diff --check`。
+Implementer 必须向 Supervisor 返回任务/基线、实际修改文件与所有权映射、
+可应用 diff 或 worktree、命令退出结果、未验证范围，以及公共 API、平台差异和
+安全默认值影响。
+Integrator 必须检查改动范围
+不重叠并记录 `git diff --check`。
 
 Verify-Reviewer 先运行契约的最小验证，再检查公共 API、跨平台一致性、JS 桥、安全默认值和受影响测试。报告必须写入
 候选 SHA、命令与退出结果、未验证范围、P0/P1/P2 和唯一的 `PASS` 或 `REJECT`。P0/P1 必须 `REJECT`；P2 不阻断但
