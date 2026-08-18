@@ -1,0 +1,20 @@
+{
+  "schemaVersion": 1,
+  "taskId": "MW-20260818-004",
+  "baselineSha": "8605c85e838507df677383bbf154ff6b665e21ea",
+  "status": "PR_READY",
+  "mode": "FULL",
+  "currentStage": "PR",
+  "attempts": {
+    "PLANNING": 1,
+    "IMPLEMENTING": 1,
+    "VALIDATING": 1,
+    "REVIEWING": 1
+  },
+  "candidateSha": "3ba4d6d41c327650ace3555aebc832cce1e71275",
+  "verdict": "PASS",
+  "nextAction": "由 Planner 审核最小角色编排契约",
+  "lastEventAt": "2026-08-18T03:45:09.856090+00:00",
+  "stopReason": null,
+  "reviewedCandidateSha": "3ba4d6d41c327650ace3555aebc832cce1e71275"
+}

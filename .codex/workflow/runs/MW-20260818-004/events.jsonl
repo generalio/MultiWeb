@@ -1,0 +1,6 @@
+{"actor": "SUPERVISOR", "at": "2026-08-18T03:32:11.541598+00:00", "evidence": "task-contract.md", "from": "PLANNED", "summary": "状态迁移已验证", "to": "IMPLEMENTING"}
+{"actor": "IMPLEMENTER", "at": "2026-08-18T03:36:45.485177+00:00", "evidence": "task-contract.md", "from": "IMPLEMENTING", "summary": "状态迁移已验证", "to": "READY_TO_INTEGRATE"}
+{"actor": "INTEGRATOR", "at": "2026-08-18T03:39:49.116425+00:00", "evidence": "candidate.sha", "from": "READY_TO_INTEGRATE", "summary": "状态迁移已验证", "to": "VALIDATING"}
+{"actor": "VERIFY_REVIEWER", "at": "2026-08-18T03:43:29.537655+00:00", "evidence": "review-report.md", "from": "VALIDATING", "summary": "状态迁移已验证", "to": "REVIEWED"}
+{"actor": "SUPERVISOR", "at": "2026-08-18T03:43:29.681915+00:00", "evidence": "review-report.md", "from": "REVIEWED", "summary": "状态迁移已验证", "to": "COMMIT_READY"}
+{"actor": "SUPERVISOR", "at": "2026-08-18T03:45:09.856090+00:00", "evidence": "review-report.md", "from": "COMMIT_READY", "summary": "状态迁移已验证", "to": "PR_READY"}
