@@ -136,10 +136,40 @@ interface ScriptBridge {
  */
 sealed interface ScriptBridgeOriginPolicy {
   /** 仅允许指定精确主机的 HTTPS 默认端口 443 页面使用桥。 */
-  data class ExactHttpsHosts(
-    /** 允许使用桥的精确 HTTPS 主机名集合；不能为空且不支持通配符。 */
-    val hosts: Set<String>,
-  ) : ScriptBridgeOriginPolicy
+  class ExactHttpsHosts : ScriptBridgeOriginPolicy {
+    /**
+     * 允许使用桥的精确 HTTPS 主机名集合。
+     *
+     * 集合不能为空；每项必须是无端口、凭据、路径或通配符的精确 ASCII 主机名。
+     *
+     * 构造时会拒绝 Unicode 和其他 URL 片段，避免平台对同一来源产生不同解释。
+     * 构造器会创建只读快照，避免调用方后续修改传入的可变集合后绕过来源校验。
+     */
+    val hosts: Set<String>
+
+    constructor(hosts: Set<String>) {
+      val hostSnapshot = buildSet { addAll(hosts) }
+      require(hostSnapshot.isNotEmpty()) {
+        "JS 桥必须声明至少一个受信任主机。"
+      }
+      hostSnapshot.forEach { host ->
+        require(isExactAsciiHost(host)) {
+          "JS 桥只允许精确 ASCII 主机名且不支持通配符：$host"
+        }
+      }
+      this.hosts = hostSnapshot
+    }
+
+    operator fun component1(): Set<String> = hosts
+
+    fun copy(hosts: Set<String> = this.hosts): ExactHttpsHosts = ExactHttpsHosts(hosts)
+
+    override fun equals(other: Any?): Boolean = other is ExactHttpsHosts && hosts == other.hosts
+
+    override fun hashCode(): Int = hosts.hashCode()
+
+    override fun toString(): String = "ExactHttpsHosts(hosts=$hosts)"
+  }
 
   /**
    * 不安全的旧页面兼容模式：仅允许主框架的 HTTP/HTTPS 页面使用桥。
@@ -149,6 +179,13 @@ sealed interface ScriptBridgeOriginPolicy {
    */
   data object UnsafeAnyHttpOrHttps : ScriptBridgeOriginPolicy
 }
+
+private val exactAsciiHostPattern = Regex(
+  "(?:[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?)" +
+    "(?:\\.(?:[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?))*",
+)
+
+private fun isExactAsciiHost(host: String): Boolean = exactAsciiHostPattern.matches(host)
 
 /**
  * 可声明自定义来源策略的 JS 桥。

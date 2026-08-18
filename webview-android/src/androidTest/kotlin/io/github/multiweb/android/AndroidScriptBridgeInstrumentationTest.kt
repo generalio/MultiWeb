@@ -81,6 +81,63 @@ class AndroidScriptBridgeInstrumentationTest {
   }
 
   @Test
+  fun 精确Https来源门面不会在同源srcdoc子框架创建() {
+    assumeBridgeFeaturesSupported()
+    val evaluationCompleted = CountDownLatch(1)
+    val result = AtomicReference<String>()
+    val instrumentation = InstrumentationRegistry.getInstrumentation()
+    val activity = launchWebViewActivity()
+    lateinit var webView: WebView
+    instrumentation.runOnMainSync {
+      webView = WebView(activity).apply {
+        settings.javaScriptEnabled = true
+        AndroidScriptBridgeInstaller.install(
+          webView = this,
+          javaScriptEnabled = true,
+          bridges = listOf(
+            object : ScriptBridgeWithFacade {
+              override val name: String = "TrustedBridge"
+              override val transportName: String = "__multiweb_trusted_bridge"
+              override val allowedHosts: Set<String> = setOf("trusted.example")
+              override val facade: ScriptBridgeFacade = ScriptBridgeFacade(setOf("ping"))
+
+              override fun handle(call: ScriptBridgeCall): ScriptBridgeResponse {
+                return ScriptBridgeResponse(isSuccess = true)
+              }
+            },
+          ),
+        )
+        webChromeClient = object : WebChromeClient() {
+          override fun onConsoleMessage(consoleMessage: ConsoleMessage): Boolean {
+            val prefix = "multiweb-trusted-child-facade:"
+            if (consoleMessage.message().startsWith(prefix)) {
+              result.set(consoleMessage.message().removePrefix(prefix))
+              evaluationCompleted.countDown()
+            }
+            return super.onConsoleMessage(consoleMessage)
+          }
+        }
+        activity.setContentView(this)
+        loadDataWithBaseURL(
+          "https://trusted.example/",
+          "<iframe srcdoc=\"<script>console.log('multiweb-trusted-child-facade:' + " +
+            "(window.TrustedBridge === undefined));</script>\"></iframe>",
+          "text/html",
+          "utf-8",
+          null,
+        )
+      }
+    }
+
+    try {
+      assertTrue("未完成同源子框架门面检查", evaluationCompleted.await(10, TimeUnit.SECONDS))
+      assertEquals("true", result.get())
+    } finally {
+      destroyWebView(activity, webView)
+    }
+  }
+
+  @Test
   fun 不安全来源策略允许顶层Https页面调用受限桥() {
     assertUnsafeBridgeCanBeCalled("https://legacy.example/")
   }

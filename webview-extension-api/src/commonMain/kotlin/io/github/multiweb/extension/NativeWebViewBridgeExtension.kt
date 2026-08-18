@@ -119,6 +119,10 @@ class NativeWebViewBridgeExtension private constructor(
   /**
    * 创建仅允许精确 HTTPS 主机使用的旧网页桥。
    *
+   * [allowedHosts] 必须为非空的精确 ASCII 主机名集合。
+   * [ScriptBridgeOriginPolicy.ExactHttpsHosts] 会在构造时拒绝端口、凭据、通配符、Unicode 与其他 URL
+   * 片段。
+   *
    * 此构造器保留既有公开 API 与默认安全语义。
    * [ScriptBridgeOriginPolicy.UnsafeAnyHttpOrHttps] 必须通过另一个显式命名的构造器选择。
    */
@@ -131,6 +135,9 @@ class NativeWebViewBridgeExtension private constructor(
 
   /**
    * 创建启用受控旧脚本执行能力的桥。
+   *
+   * [allowedHosts] 沿用精确 HTTPS 主机约束。非法集合会在构造时被拒绝，
+   * 不能借由旧脚本执行入口放宽来源范围。
    *
    * 关闭时 [NativeWebViewBridgeRequest.SetPageLoadScript] 与 [NativeWebViewBridgeRequest.ExecuteJavaScript] 继续交由
    * [host] 处理，保持既有行为。开启后这两个请求不再进入 [host]：最新页面脚本会在受信任主文档完成加载后执行，

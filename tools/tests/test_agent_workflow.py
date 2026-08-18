@@ -45,6 +45,125 @@ class AgentWorkflowCliTest(unittest.TestCase):
             check=False,
         )
 
+    def snapshot_run_directory(self, run_directory: Path) -> dict[str, bytes | None]:
+        """记录运行目录的文件集合、空目录和文件字节，用于验证失败路径无副作用。"""
+        return {
+            path.relative_to(run_directory).as_posix(): path.read_bytes() if path.is_file() else None
+            for path in sorted(run_directory.rglob("*"), key=lambda item: item.as_posix())
+        }
+
+    def test_all_workflow_role_configs_require_the_autonomous_handoff_protocol(self) -> None:
+        protocol_path = REPOSITORY_ROOT / "docs" / "agent-workflow-autonomous-handoff.md"
+        protocol_relative_path = protocol_path.relative_to(REPOSITORY_ROOT).as_posix()
+        role_configuration_paths = (
+            REPOSITORY_ROOT / ".codex" / "agents" / "workflow-implementer.toml",
+            REPOSITORY_ROOT / ".codex" / "agents" / "workflow-integrator.toml",
+            REPOSITORY_ROOT / ".codex" / "agents" / "workflow-planner.toml",
+            REPOSITORY_ROOT / ".codex" / "agents" / "workflow-verify-reviewer.toml",
+        )
+
+        self.assertTrue(protocol_path.is_file(), f"缺少工作流协议文件：{protocol_relative_path}")
+        for role_configuration_path in role_configuration_paths:
+            self.assertIn(
+                protocol_relative_path,
+                role_configuration_path.read_text(encoding="utf-8"),
+                f"{role_configuration_path.relative_to(REPOSITORY_ROOT)} 必须声明工作流协议文件",
+            )
+
+    def test_workflow_documents_and_role_configs_forbid_default_handoff_documents(self) -> None:
+        default_handoff_policy = "默认不得生成或要求 `handoffs/` 阶段交接文档"
+        workflow_document_paths = (
+            REPOSITORY_ROOT / "AGENTS.md",
+            REPOSITORY_ROOT / "docs" / "agent-workflow.md",
+            REPOSITORY_ROOT / "docs" / "agent-workflow-autonomous-handoff.md",
+            REPOSITORY_ROOT / "docs" / "agent-workflow-task-template.md",
+            REPOSITORY_ROOT / ".codex" / "workflow" / "README.md",
+        )
+        role_configuration_paths = (
+            REPOSITORY_ROOT / ".codex" / "agents" / "workflow-implementer.toml",
+            REPOSITORY_ROOT / ".codex" / "agents" / "workflow-integrator.toml",
+            REPOSITORY_ROOT / ".codex" / "agents" / "workflow-planner.toml",
+            REPOSITORY_ROOT / ".codex" / "agents" / "workflow-verify-reviewer.toml",
+        )
+
+        for workflow_document_path in workflow_document_paths:
+            self.assertIn(
+                default_handoff_policy,
+                workflow_document_path.read_text(encoding="utf-8"),
+                f"{workflow_document_path.relative_to(REPOSITORY_ROOT)} 必须禁止默认阶段交接文档",
+            )
+        for role_configuration_path in role_configuration_paths:
+            self.assertIn(
+                default_handoff_policy,
+                role_configuration_path.read_text(encoding="utf-8"),
+                f"{role_configuration_path.relative_to(REPOSITORY_ROOT)} 必须禁止默认阶段交接文档",
+            )
+
+    def test_workflow_documents_and_role_configs_enforce_minimal_role_topology(self) -> None:
+        default_topology = "默认仅启动 `Planner -> 单一 Implementer -> Integrator -> Verify-Reviewer` 四个角色，并严格顺序执行。"
+        platform_agent_prohibition = "不得因 Android、iOS、Desktop、JS/Wasm 或测试平台自动创建、拆分或并发专项 Agent。"
+        second_implementer_approval = (
+            "第二个 Implementer 仅可由 Planner 在任务契约中书面批准，且必须同时满足范围不重叠、验证独立、"
+            "两个范围均不含 `webview-api`、`webview-extension-api`、API 基线、Gradle 设置、发布配置或跨平台契约；"
+            "同一任务最多两个 Implementer。"
+        )
+        integration_gate = "即使例外获批，也必须全体 Implementer 完成后才进入 Integrator。"
+        workflow_document_paths = (
+            REPOSITORY_ROOT / "AGENTS.md",
+            REPOSITORY_ROOT / "docs" / "agent-workflow.md",
+            REPOSITORY_ROOT / "docs" / "agent-workflow-autonomous-handoff.md",
+            REPOSITORY_ROOT / "docs" / "agent-workflow-task-template.md",
+            REPOSITORY_ROOT / ".codex" / "workflow" / "README.md",
+        )
+        role_configuration_paths = tuple(
+            sorted((REPOSITORY_ROOT / ".codex" / "agents").glob("workflow-*.toml"))
+        )
+
+        self.assertEqual(
+            tuple(path.name for path in role_configuration_paths),
+            (
+                "workflow-implementer.toml",
+                "workflow-integrator.toml",
+                "workflow-planner.toml",
+                "workflow-verify-reviewer.toml",
+            ),
+            "永久工作流角色配置必须精确为四个最小角色",
+        )
+        for policy in (
+            default_topology,
+            platform_agent_prohibition,
+            second_implementer_approval,
+            integration_gate,
+        ):
+            for path in (*workflow_document_paths, *role_configuration_paths):
+                self.assertIn(
+                    policy,
+                    path.read_text(encoding="utf-8"),
+                    f"{path.relative_to(REPOSITORY_ROOT)} 必须声明最小角色编排规则：{policy}",
+                )
+
+        task_template = (REPOSITORY_ROOT / "docs" / "agent-workflow-task-template.md").read_text(
+            encoding="utf-8"
+        )
+        planner_configuration = (
+            REPOSITORY_ROOT / ".codex" / "agents" / "workflow-planner.toml"
+        ).read_text(encoding="utf-8")
+        self.assertIn("- 角色编排：", task_template)
+        self.assertIn("- 第二个 Implementer：`不批准` / `批准`；", task_template)
+        self.assertIn("Planner 必须在任务契约中书面批准第二个 Implementer", planner_configuration)
+
+    def test_workflow_readme_describes_stop_option_validation_before_lock_acquisition(self) -> None:
+        workflow_readme = REPOSITORY_ROOT / ".codex" / "workflow" / "README.md"
+        content = workflow_readme.read_text(encoding="utf-8")
+
+        self.assertIn(
+            "在获取 `.workflow.lock` 前，`transition` 会先校验目标状态与 "
+            "`--stop-reason`、`--next-action` 的组合。",
+            content,
+        )
+        self.assertNotIn("三个命令都会先获取", content)
+        self.assertNotIn("├── handoffs/", content)
+
     def test_validate_accepts_a_planned_run(self) -> None:
         run_directory = self.copy_fixture("valid")
 
@@ -111,6 +230,155 @@ class AgentWorkflowCliTest(unittest.TestCase):
         self.assertIn("PLANNED", result.stderr)
         self.assertIn("允许", result.stderr)
 
+    def test_transition_to_stopped_states_requires_both_stop_options_without_mutating_ledger(self) -> None:
+        option_sets = (
+            ("neither", ()),
+            ("reason-only", ("--stop-reason", "等待维护者授权")),
+            ("action-only", ("--next-action", "恢复实施阶段")),
+        )
+        for next_status in ("PAUSED", "BLOCKED"):
+            for label, stop_options in option_sets:
+                with self.subTest(next_status=next_status, label=label):
+                    run_directory = self.copy_fixture("valid", f"stop-options-{next_status}-{label}")
+                    if next_status == "BLOCKED":
+                        implementing = self.run_cli(
+                            "transition",
+                            str(run_directory),
+                            "IMPLEMENTING",
+                            "--actor",
+                            "SUPERVISOR",
+                            "--evidence",
+                            "task-contract.md",
+                        )
+                        self.assertEqual(implementing.returncode, 0, implementing.stderr)
+                        (run_directory / ".workflow.lock").unlink()
+                    before_run_directory = self.snapshot_run_directory(run_directory)
+                    self.assertNotIn(".workflow.lock", before_run_directory)
+
+                    result = self.run_cli(
+                        "transition",
+                        str(run_directory),
+                        next_status,
+                        "--actor",
+                        "SUPERVISOR",
+                        "--evidence",
+                        "task-contract.md",
+                        *stop_options,
+                    )
+
+                    self.assertNotEqual(result.returncode, 0)
+                    self.assertIn("--stop-reason", result.stderr)
+                    self.assertIn("--next-action", result.stderr)
+                    self.assertEqual(self.snapshot_run_directory(run_directory), before_run_directory)
+
+    def test_transition_to_stopped_states_rejects_empty_or_multiline_stop_options(self) -> None:
+        invalid_stop_options = (
+            ("empty-reason", "", "恢复实施阶段"),
+            ("blank-reason", "  ", "恢复实施阶段"),
+            ("multiline-reason", "等待维护者\n授权", "恢复实施阶段"),
+            ("empty-action", "等待维护者授权", ""),
+            ("blank-action", "等待维护者授权", "  "),
+            ("multiline-action", "等待维护者授权", "恢复\n实施阶段"),
+        )
+        for label, stop_reason, next_action in invalid_stop_options:
+            with self.subTest(label=label):
+                run_directory = self.copy_fixture("valid", f"invalid-stop-options-{label}")
+                before_run_directory = self.snapshot_run_directory(run_directory)
+                self.assertNotIn(".workflow.lock", before_run_directory)
+
+                result = self.run_cli(
+                    "transition",
+                    str(run_directory),
+                    "PAUSED",
+                    "--actor",
+                    "SUPERVISOR",
+                    "--evidence",
+                    "task-contract.md",
+                    "--stop-reason",
+                    stop_reason,
+                    "--next-action",
+                    next_action,
+                )
+
+                self.assertNotEqual(result.returncode, 0)
+                self.assertIn("非空单行", result.stderr)
+                self.assertEqual(self.snapshot_run_directory(run_directory), before_run_directory)
+
+    def test_transition_rejects_stop_options_for_non_stopped_states_without_mutating_ledger(self) -> None:
+        option_sets = (
+            ("reason-only", ("--stop-reason", "等待维护者授权")),
+            ("action-only", ("--next-action", "恢复实施阶段")),
+            (
+                "both",
+                ("--stop-reason", "等待维护者授权", "--next-action", "恢复实施阶段"),
+            ),
+        )
+        for label, stop_options in option_sets:
+            with self.subTest(label=label):
+                run_directory = self.copy_fixture("valid", f"non-stop-options-{label}")
+                before_run_directory = self.snapshot_run_directory(run_directory)
+                self.assertNotIn(".workflow.lock", before_run_directory)
+
+                result = self.run_cli(
+                    "transition",
+                    str(run_directory),
+                    "IMPLEMENTING",
+                    "--actor",
+                    "SUPERVISOR",
+                    "--evidence",
+                    "task-contract.md",
+                    *stop_options,
+                )
+
+                self.assertNotEqual(result.returncode, 0)
+                self.assertIn("PAUSED 或 BLOCKED", result.stderr)
+                self.assertEqual(self.snapshot_run_directory(run_directory), before_run_directory)
+
+    def test_transition_to_stopped_states_records_stop_context_in_state_event_and_resume(self) -> None:
+        for next_status in ("PAUSED", "BLOCKED"):
+            with self.subTest(next_status=next_status):
+                run_directory = self.copy_fixture("valid", f"stopped-state-{next_status}")
+                if next_status == "BLOCKED":
+                    implementing = self.run_cli(
+                        "transition",
+                        str(run_directory),
+                        "IMPLEMENTING",
+                        "--actor",
+                        "SUPERVISOR",
+                        "--evidence",
+                        "task-contract.md",
+                    )
+                    self.assertEqual(implementing.returncode, 0, implementing.stderr)
+                stop_reason = f"{next_status} 等待维护者授权"
+                next_action = f"{next_status} 恢复实施阶段"
+
+                transition = self.run_cli(
+                    "transition",
+                    str(run_directory),
+                    next_status,
+                    "--actor",
+                    "SUPERVISOR",
+                    "--evidence",
+                    "task-contract.md",
+                    "--stop-reason",
+                    stop_reason,
+                    "--next-action",
+                    next_action,
+                )
+
+                self.assertEqual(transition.returncode, 0, transition.stderr)
+                state = json.loads((run_directory / "state.json").read_text(encoding="utf-8"))
+                event = json.loads((run_directory / "events.jsonl").read_text(encoding="utf-8").splitlines()[-1])
+                resume = self.run_cli("resume", str(run_directory))
+                self.assertEqual(state["status"], next_status)
+                self.assertEqual(state["stopReason"], stop_reason)
+                self.assertEqual(state["nextAction"], next_action)
+                self.assertIn(stop_reason, event["summary"])
+                self.assertIn(next_action, event["summary"])
+                self.assertEqual(resume.returncode, 0, resume.stderr)
+                self.assertIn(stop_reason, resume.stdout)
+                self.assertIn(next_action, resume.stdout)
+
     def test_transition_records_a_legal_status_chain(self) -> None:
         run_directory = self.copy_fixture("valid")
 
@@ -123,9 +391,6 @@ class AgentWorkflowCliTest(unittest.TestCase):
             "--evidence",
             "task-contract.md",
         )
-        handoff_directory = run_directory / "handoffs"
-        handoff_directory.mkdir()
-        (handoff_directory / "implementer.md").write_text("完成交接\n", encoding="utf-8")
         integrating = self.run_cli(
             "transition",
             str(run_directory),
@@ -133,7 +398,7 @@ class AgentWorkflowCliTest(unittest.TestCase):
             "--actor",
             "IMPLEMENTER",
             "--evidence",
-            "handoffs/implementer.md",
+            "task-contract.md",
         )
 
         state = json.loads((run_directory / "state.json").read_text(encoding="utf-8"))
@@ -144,6 +409,7 @@ class AgentWorkflowCliTest(unittest.TestCase):
         self.assertEqual(state["currentStage"], "INTEGRATING")
         self.assertEqual(state["attempts"]["IMPLEMENTING"], 1)
         self.assertEqual(len(events), 2)
+        self.assertFalse((run_directory / "handoffs").exists())
 
     def test_transition_cli_completes_a_full_passed_chain_without_editing_state(self) -> None:
         run_directory = self.copy_fixture("valid")
@@ -160,9 +426,6 @@ class AgentWorkflowCliTest(unittest.TestCase):
                 "task-contract.md",
             )
         ]
-        handoff_directory = run_directory / "handoffs"
-        handoff_directory.mkdir()
-        (handoff_directory / "implementer.md").write_text("完成交接\n", encoding="utf-8")
         results.append(
             self.run_cli(
                 "transition",
@@ -171,7 +434,7 @@ class AgentWorkflowCliTest(unittest.TestCase):
                 "--actor",
                 "IMPLEMENTER",
                 "--evidence",
-                "handoffs/implementer.md",
+                "task-contract.md",
             )
         )
         (run_directory / "candidate.sha").write_text(f"{candidate_sha}\n", encoding="utf-8")
@@ -236,6 +499,7 @@ class AgentWorkflowCliTest(unittest.TestCase):
         self.assertEqual(state["status"], "PR_READY")
         self.assertEqual(state["candidateSha"], candidate_sha)
         self.assertEqual(state["verdict"], "PASS")
+        self.assertFalse((run_directory / "handoffs").exists())
         events = [
             json.loads(line)
             for line in (run_directory / "events.jsonl").read_text(encoding="utf-8").splitlines()
@@ -258,9 +522,6 @@ class AgentWorkflowCliTest(unittest.TestCase):
             ).returncode,
             0,
         )
-        handoff_directory = run_directory / "handoffs"
-        handoff_directory.mkdir()
-        (handoff_directory / "implementer.md").write_text("完成交接\n", encoding="utf-8")
         self.assertEqual(
             self.run_cli(
                 "transition",
@@ -269,7 +530,7 @@ class AgentWorkflowCliTest(unittest.TestCase):
                 "--actor",
                 "IMPLEMENTER",
                 "--evidence",
-                "handoffs/implementer.md",
+                "task-contract.md",
             ).returncode,
             0,
         )
@@ -826,6 +1087,10 @@ class AgentWorkflowCliTest(unittest.TestCase):
             "SUPERVISOR",
             "--evidence",
             "task-contract.md",
+            "--stop-reason",
+            "等待维护者授权",
+            "--next-action",
+            "恢复 PLANNED 阶段并等待维护者授权",
         )
         first_resume = self.run_cli(
             "transition",
@@ -844,6 +1109,10 @@ class AgentWorkflowCliTest(unittest.TestCase):
             "SUPERVISOR",
             "--evidence",
             "task-contract.md",
+            "--stop-reason",
+            "等待维护者授权",
+            "--next-action",
+            "恢复 PLANNED 阶段并等待维护者授权",
         )
         exhausted_resume = self.run_cli(
             "transition",
@@ -900,7 +1169,7 @@ class AgentWorkflowCliTest(unittest.TestCase):
             "--actor",
             "IMPLEMENTER",
             "--evidence",
-            "handoffs/implementer.md",
+            "review-report.md",
         )
         validating = self.run_cli(
             "transition",

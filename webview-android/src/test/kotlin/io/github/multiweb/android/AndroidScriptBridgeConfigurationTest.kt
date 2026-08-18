@@ -31,6 +31,24 @@ class AndroidScriptBridgeConfigurationTest {
   }
 
   @Test
+  fun `精确 HTTPS 门面脚本只在顶层窗口创建`() {
+    val configuration = AndroidScriptBridgeConfiguration.create(
+      listOf(
+        object : ScriptBridgeWithFacade {
+          override val name = "TrustedBridge"
+          override val transportName = "__trusted_bridge_transport"
+          override val allowedHosts = setOf("trusted.example")
+          override val facade = ScriptBridgeFacade(setOf("ping"))
+
+          override fun handle(call: ScriptBridgeCall): ScriptBridgeResponse? = null
+        },
+      ),
+    ).single()
+
+    assertContains(requireNotNull(configuration.facadeInjectionScript()), "window.top === window")
+  }
+
+  @Test
   fun `脚本执行仅接受可信 HTTPS 默认端口主文档`() {
     val allowedHosts = setOf("EXAMPLE.com")
 

@@ -17,21 +17,36 @@
 ## 多 Agent 协作
 
 - 中大型需求必须由 Supervisor 创建任务 ID、任务契约和 `.codex/workflow/runs/<task-id>/` 账本，再依次启动
-  Planner、独占 worktree 的 Implementer、Integrator 和固定候选 SHA 的 Verify-Reviewer。没有交接产物、候选
+  Planner、独占 worktree 的 Implementer、Integrator 和固定候选 SHA 的 Verify-Reviewer。
+  没有任务契约、候选
   SHA 或 `PASS` 裁决不得进入下一状态。若当前会话无法启动所需子 Agent，必须记录阻断原因，不得静默降级为单 Agent。
+- 默认仅启动 `Planner -> 单一 Implementer -> Integrator -> Verify-Reviewer` 四个角色，并严格顺序执行。
+- 不得因 Android、iOS、Desktop、JS/Wasm 或测试平台自动创建、拆分或并发专项 Agent。
+- 第二个 Implementer 仅可由 Planner 在任务契约中书面批准，且必须同时满足范围不重叠、验证独立、两个范围均不含 `webview-api`、`webview-extension-api`、API 基线、Gradle 设置、发布配置或跨平台契约；同一任务最多两个 Implementer。
+- 即使例外获批，也必须全体 Implementer 完成后才进入 Integrator。
+- 默认不得生成或要求 `handoffs/` 阶段交接文档。只有维护者明确指出上下文超出并要求时，
+  才允许创建并引用该目录中的文件。任务契约、计划、候选 SHA 与审查报告
+  属于账本或门禁证据，
+  不属于交接文档。
 - Planner 必须记录基线 SHA、依赖、独占文件/模块范围、最小验证命令及公共 API、跨平台和安全影响。只有在契约明确
   `TRIVIAL` 理由和快速路径验证命令时，才可不走完整并行流程。
 - Supervisor 每次状态变化先调用 `tools/agent_workflow.py transition` 写入账本，再执行下一动作；进入 `VALIDATING`
   必须传 `--candidate-sha`，进入 `REVIEWED` 必须传 `--verdict PASS|REJECT`。恢复前先 `validate`，再用 `resume`
-  读取唯一下一步。任务目录不得保存凭据、Token 或完整环境变量。
+  读取唯一下一步。进入 `PAUSED` 或 `BLOCKED` 必须同时传入非空单行的 `--stop-reason` 和
+  `--next-action`；其他状态传入任一停止参数必须失败且不写账本。任务目录
+  不得保存凭据、Token
+  或完整环境变量。
 - 并行实施必须使用相互隔离的 worktree；同一文件或模块同一时刻只能有一个 Implementer 写入。`webview-api`、
   `webview-extension-api`、API 基线、Gradle 设置、发布配置和跨平台契约必须串行处理。
-- Integrator 只能应用已交接的改动并解决不改变语义的机械冲突。接口签名、默认值、导航策略、JS 桥、安全设置或测试
-  预期冲突必须退回原 Implementer 或 Planner，不得在集成阶段自行修复。
+- Integrator 只能应用任务契约授权且由 Supervisor 转交的改动，并解决不改变语义的
+  机械冲突。接口签名、默认值、导航策略、JS 桥、安全设置或测试预期冲突必须退回原
+  Implementer 或 Planner，
+  不得在集成阶段自行修复。
 - Verify-Reviewer 只能在干净 worktree 对固定候选 SHA 运行验证和审查，禁止修改候选代码、测试或 API 基线。候选
   SHA 变化后，先前裁决立即失效。P0/P1 必须 `REJECT` 并阻断提交/PR；P2 必须写入风险与兼容性说明。
-- 项目角色配置位于 `.codex/agents/`。角色须先阅读本文件、`docs/agent-workflow.md` 和运行协议；优先级为
-  `AGENTS.md`、`docs/agent-workflow.md`、任务交接文档。
+- 项目角色配置位于 `.codex/agents/`。角色须先阅读本文件、`docs/agent-workflow.md` 和运行协议；
+  优先级为 `AGENTS.md`、`docs/agent-workflow.md`、运行协议；维护者明确要求的额外交接文档
+  仅作为补充信息。
 
 ## 注释与文档
 
