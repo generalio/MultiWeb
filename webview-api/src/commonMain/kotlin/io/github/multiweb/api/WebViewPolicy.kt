@@ -3,7 +3,10 @@ package io.github.multiweb.api
 /**
  * WebView 的安全配置。
  *
- * 所有高风险能力均采用最小权限默认值；平台不支持的选项必须由对应实现明确说明。
+ * 除会话持久化外，所有高风险能力均采用最小权限默认值。
+ *
+ * 会话持久化的兼容默认值为 `true`，因为 Android 和 Desktop 无法按控制器隔离临时会话。
+ * iOS 可显式设为 `false` 使用临时会话；平台不支持的选项必须由对应实现明确说明。
  */
 data class WebViewConfig(
   /** 是否允许页面执行 JavaScript，默认关闭。 */
@@ -12,7 +15,12 @@ data class WebViewConfig(
   val thirdPartyCookiesEnabled: Boolean = false,
   /** 是否允许页面访问本地文件，默认关闭。 */
   val fileAccessEnabled: Boolean = false,
-  /** 是否持久化 Cookie、缓存等会话数据；关闭时使用临时会话。 */
+  /**
+   * 是否持久化 Cookie、缓存等会话数据。
+   *
+   * 默认 true 兼容 Android 和 Desktop 无法按控制器隔离临时会话。
+   * iOS 可显式设为 false 使用临时会话。
+   */
   val persistentSessionEnabled: Boolean = true,
   /** 允许在内嵌浏览器中访问的主机名集合；空集合表示由导航策略决定。 */
   val allowedHosts: Set<String> = emptySet(),
