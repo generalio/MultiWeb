@@ -21,8 +21,8 @@ import java.net.URI
  *
  * 不使用 `addJavascriptInterface`：后者会把整个对象暴露给所有已加载页面。精确 HTTPS 策略直接使用对应来源规则；
  * 不安全兼容策略必须使用 AndroidX WebKit 的全来源 `*` 规则安装内部消息通道，因而该内部对象会进入全部框架。
- * 此时网页门面仅在顶层 HTTP/HTTPS 页面创建，原生消息入口也会再次拒绝直接来自子框架、`file:`、`data:` 与自定义
- * Scheme 的请求。
+ * 两种策略的网页门面均仅在顶层窗口创建，原生消息入口也会再次拒绝直接来自子框架、
+ * `file:`、`data:` 与自定义 Scheme 的请求。
  */
 internal object AndroidScriptBridgeInstaller {
   fun install(
@@ -79,11 +79,11 @@ internal data class AndroidScriptBridgeConfiguration(
   /** AndroidX WebKit 安装内部消息通道与门面脚本时使用的来源规则。 */
   val allowedOriginRules: Set<String>,
 ) {
-  /** 生成受限 Promise 门面；不安全模式下门面仅在顶层 HTTP/HTTPS 页面创建。 */
+  /** 生成受限 Promise 门面；所有策略的门面均仅在顶层窗口创建。 */
   fun facadeInjectionScript(): String? {
     val bridgeFacade = facade ?: return null
     val originCheck = when (originPolicy) {
-      is ScriptBridgeOriginPolicy.ExactHttpsHosts -> "true"
+      is ScriptBridgeOriginPolicy.ExactHttpsHosts -> "window.top === window"
       ScriptBridgeOriginPolicy.UnsafeAnyHttpOrHttps -> {
         "window.top === window && (window.location.protocol === 'http:' || " +
           "window.location.protocol === 'https:') && window.location.hostname.length > 0"

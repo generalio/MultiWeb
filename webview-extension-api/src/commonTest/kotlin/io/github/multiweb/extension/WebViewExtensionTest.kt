@@ -7,6 +7,7 @@ import io.github.multiweb.api.WebViewController
 import io.github.multiweb.api.WebViewState
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFailsWith
 import kotlin.test.assertSame
 import kotlin.test.assertTrue
 
@@ -47,6 +48,58 @@ class WebViewExtensionTest {
     assertEquals("{\"top\":24}", bridge.handle(ScriptBridgeCall("getInsets"))?.payload)
     assertEquals("unknown_method", bridge.handle(ScriptBridgeCall("other"))?.errorCode)
     assertEquals("", bridge.handle(ScriptBridgeCall("other"))?.payload)
+  }
+
+  @Test
+  fun `精确 HTTPS 主机策略拒绝空集合和非精确 ASCII 主机`() {
+    val invalidHostSets = listOf(
+      emptySet(),
+      setOf("*.example.com"),
+      setOf("example.com:8443"),
+      setOf("user:pass@example.com"),
+      setOf("例子.com"),
+      setOf("münich.example"),
+      setOf("https://example.com"),
+      setOf("example.com/path"),
+    )
+
+    invalidHostSets.forEach { hosts ->
+      assertFailsWith<IllegalArgumentException> {
+        ScriptBridgeOriginPolicy.ExactHttpsHosts(hosts)
+      }
+    }
+  }
+
+  @Test
+  fun `精确 HTTPS 主机策略接受合法大小写 ASCII 主机`() {
+    val hosts = setOf("EXAMPLE.com", "api.example.com")
+
+    val policy = ScriptBridgeOriginPolicy.ExactHttpsHosts(hosts)
+
+    assertEquals(hosts, policy.hosts)
+  }
+
+  @Test
+  fun `精确 HTTPS 主机策略防御性复制传入的可变集合`() {
+    val hosts = mutableSetOf("trusted.example")
+
+    val policy = ScriptBridgeOriginPolicy.ExactHttpsHosts(hosts)
+    hosts += "evil.example"
+
+    assertEquals(setOf("trusted.example"), policy.hosts)
+  }
+
+  @Test
+  fun `精确 HTTPS 主机策略的 copy 防御性复制传入的可变集合`() {
+    val policy = ScriptBridgeOriginPolicy.ExactHttpsHosts(setOf("trusted.example"))
+    val copiedHosts = mutableSetOf("trusted.example")
+
+    val copiedPolicy = policy.copy(hosts = copiedHosts)
+    copiedHosts += "evil.example"
+
+    assertEquals(setOf("trusted.example"), copiedPolicy.hosts)
+    assertEquals(copiedPolicy.hosts, copiedPolicy.component1())
+    assertEquals(copiedPolicy, copiedPolicy.copy())
   }
 
   @Test

@@ -39,6 +39,10 @@ class IosScriptBridgeConfigurationTest {
     assertTrue(isTrustedJavaScriptUrl("https://example.com:443/page", allowedHosts))
     assertFalse(isTrustedJavaScriptUrl("https://example.com:8443/page", allowedHosts))
     assertFalse(isTrustedJavaScriptUrl("http://example.com/page", allowedHosts))
+  }
+
+  @Test
+  fun `空的 HTTPS 主机集合拒绝可信 URL`() {
     assertFalse(isTrustedJavaScriptUrl("https://example.com/page", emptySet()))
   }
 

@@ -53,7 +53,11 @@ class DesktopScriptBridgeConfigurationTest {
     assertEquals(true, isTrustedJavaScriptUrl("https://example.com:443/page", allowedHosts))
     assertEquals(false, isTrustedJavaScriptUrl("https://example.com:8443/page", allowedHosts))
     assertEquals(false, isTrustedJavaScriptUrl("http://example.com/page", allowedHosts))
-    assertEquals(false, isTrustedJavaScriptUrl("https://example.com/page", emptySet()))
+  }
+
+  @Test
+  fun `空允许主机集合拒绝可信 HTTPS 页面`() {
+    assertFalse(isTrustedJavaScriptUrl("https://example.com/page", emptySet()))
   }
 
   @Test

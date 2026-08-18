@@ -225,6 +225,9 @@ internal data class DesktopScriptBridgeConfiguration(
  * 安全边界不一致。
  */
 internal fun isTrustedJavaScriptUrl(url: String?, allowedHosts: Set<String>): Boolean {
+  if (allowedHosts.isEmpty()) {
+    return false
+  }
   return isTrustedJavaScriptUrl(url, ScriptBridgeOriginPolicy.ExactHttpsHosts(allowedHosts))
 }
 

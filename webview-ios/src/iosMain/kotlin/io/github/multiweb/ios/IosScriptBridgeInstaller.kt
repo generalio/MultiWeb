@@ -296,6 +296,9 @@ internal data class IosScriptBridgeConfiguration(
  */
 @OptIn(ExperimentalForeignApi::class)
 internal fun isTrustedJavaScriptUrl(url: String?, allowedHosts: Set<String>): Boolean {
+  if (allowedHosts.isEmpty()) {
+    return false
+  }
   return isTrustedJavaScriptUrl(url, ScriptBridgeOriginPolicy.ExactHttpsHosts(allowedHosts))
 }
 

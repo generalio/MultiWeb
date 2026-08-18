@@ -171,6 +171,33 @@ class NativeWebViewBridgeExtensionTest {
   }
 
   @Test
+  fun `旧网页桥构造器不能绕过精确主机校验`() {
+    val invalidHostSets = listOf(
+      emptySet(),
+      setOf("*.example.com"),
+      setOf("example.com:8443"),
+      setOf("user:pass@example.com"),
+      setOf("例子.com"),
+    )
+
+    invalidHostSets.forEach { hosts ->
+      assertFailsWith<IllegalArgumentException> {
+        NativeWebViewBridgeExtension(
+          allowedHosts = hosts,
+          host = NativeWebViewBridgeHost { NativeWebViewBridgeResult.Success() },
+        )
+      }
+      assertFailsWith<IllegalArgumentException> {
+        NativeWebViewBridgeExtension(
+          allowedHosts = hosts,
+          host = NativeWebViewBridgeHost { NativeWebViewBridgeResult.Success() },
+          enableLegacyJavaScriptExecution = true,
+        )
+      }
+    }
+  }
+
+  @Test
   fun `不安全兼容模式不会降级为旧脚本执行器`() {
     val extension = NativeWebViewBridgeExtension(
       originPolicy = ScriptBridgeOriginPolicy.UnsafeAnyHttpOrHttps,
