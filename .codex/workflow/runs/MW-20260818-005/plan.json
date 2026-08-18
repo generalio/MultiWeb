@@ -1,0 +1,40 @@
+{
+  "schemaVersion": 1,
+  "taskId": "MW-20260818-005",
+  "baselineSha": "4320a062d641c84c9ed5ec67e1af09551f62d430",
+  "tasks": [
+    {
+      "id": "aggregate-pr-plan",
+      "owner": "WORKFLOW_PLANNER",
+      "scope": ["read-only review of 4320a06..3ba4d6d PR evidence"],
+      "dependsOn": [],
+      "verification": ["contract completeness review"]
+    },
+    {
+      "id": "aggregate-evidence-record",
+      "owner": "WORKFLOW_IMPLEMENTER",
+      "scope": ["Supervisor-owned MW-20260818-005 ledger content proposal only"],
+      "dependsOn": ["aggregate-pr-plan"],
+      "verification": ["evidence consistency review"]
+    },
+    {
+      "id": "ledger-integration",
+      "owner": "WORKFLOW_INTEGRATOR",
+      "scope": ["MW-20260818-005 ledger record only"],
+      "dependsOn": ["aggregate-evidence-record"],
+      "verification": ["ledger validation", "git diff --check"]
+    },
+    {
+      "id": "fixed-pr-candidate-review",
+      "owner": "WORKFLOW_VERIFY_REVIEWER",
+      "scope": ["fixed candidate 3ba4d6d and aggregate evidence only"],
+      "dependsOn": ["ledger-integration"],
+      "verification": ["fixed-SHA review", "Python workflow tests"]
+    }
+  ],
+  "acceptanceCriteria": [
+    "PR 正文的公共 API、Android、iOS、Desktop 和 JS/Wasm 影响与汇总契约一致。",
+    "候选 SHA 是 PR 头的祖先，账本处于 PR_READY 且审查裁决为 PASS。",
+    "不改动已审查的候选代码。"
+  ]
+}
