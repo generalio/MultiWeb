@@ -20,6 +20,10 @@
   Planner、独占 worktree 的 Implementer、Integrator 和固定候选 SHA 的 Verify-Reviewer。
   没有任务契约、候选
   SHA 或 `PASS` 裁决不得进入下一状态。若当前会话无法启动所需子 Agent，必须记录阻断原因，不得静默降级为单 Agent。
+- 默认仅启动 `Planner -> 单一 Implementer -> Integrator -> Verify-Reviewer` 四个角色，并严格顺序执行。
+- 不得因 Android、iOS、Desktop、JS/Wasm 或测试平台自动创建、拆分或并发专项 Agent。
+- 第二个 Implementer 仅可由 Planner 在任务契约中书面批准，且必须同时满足范围不重叠、验证独立、两个范围均不含 `webview-api`、`webview-extension-api`、API 基线、Gradle 设置、发布配置或跨平台契约；同一任务最多两个 Implementer。
+- 即使例外获批，也必须全体 Implementer 完成后才进入 Integrator。
 - 默认不得生成或要求 `handoffs/` 阶段交接文档。只有维护者明确指出上下文超出并要求时，
   才允许创建并引用该目录中的文件。任务契约、计划、候选 SHA 与审查报告
   属于账本或门禁证据，

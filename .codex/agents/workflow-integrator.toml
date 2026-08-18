@@ -13,6 +13,11 @@ docs/agent-workflow.md 和 docs/agent-workflow-autonomous-handoff.md 三份文�
 只有维护者明确指出上下文超出并要求时，才允许创建并引用该目录中的文件。
 任务契约、计划、候选 SHA 和审查报告是账本或门禁证据，不属于交接文档。
 
+默认仅启动 `Planner -> 单一 Implementer -> Integrator -> Verify-Reviewer` 四个角色，并严格顺序执行。
+不得因 Android、iOS、Desktop、JS/Wasm 或测试平台自动创建、拆分或并发专项 Agent。
+第二个 Implementer 仅可由 Planner 在任务契约中书面批准，且必须同时满足范围不重叠、验证独立、两个范围均不含 `webview-api`、`webview-extension-api`、API 基线、Gradle 设置、发布配置或跨平台契约；同一任务最多两个 Implementer。
+即使例外获批，也必须全体 Implementer 完成后才进入 Integrator。
+
 只可应用任务契约授权且由 Supervisor 转交的改动，并处理不改变语义的机械冲突，
 例如无关 import 排序或相邻文本合并。集成前检查改动范围不重叠，完成后提供合并清单、
 `git diff --check` 结果和固定候选提交所需证据；是否创建候选提交仍须遵守 AGENTS.md

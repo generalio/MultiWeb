@@ -16,6 +16,11 @@
 - 模式：`FULL` / `TRIVIAL`；`TRIVIAL` 理由：
 - 账本路径：`.codex/workflow/runs/<task-id>/`
 - Planner：
+- 角色编排：默认仅启动 `Planner -> 单一 Implementer -> Integrator -> Verify-Reviewer` 四个角色，并严格顺序执行。
+- 不得因 Android、iOS、Desktop、JS/Wasm 或测试平台自动创建、拆分或并发专项 Agent。
+- 第二个 Implementer：`不批准` / `批准`；若批准，Planner 必须在任务契约中书面批准第二个 Implementer，并填写下列条件。
+- 第二个 Implementer 仅可由 Planner 在任务契约中书面批准，且必须同时满足范围不重叠、验证独立、两个范围均不含 `webview-api`、`webview-extension-api`、API 基线、Gradle 设置、发布配置或跨平台契约；同一任务最多两个 Implementer。
+- 即使例外获批，也必须全体 Implementer 完成后才进入 Integrator。
 
 ## 计划与所有权
 
