@@ -45,6 +45,24 @@ class AgentWorkflowCliTest(unittest.TestCase):
             check=False,
         )
 
+    def test_all_workflow_role_configs_require_the_autonomous_handoff_protocol(self) -> None:
+        protocol_path = REPOSITORY_ROOT / "docs" / "agent-workflow-autonomous-handoff.md"
+        protocol_relative_path = protocol_path.relative_to(REPOSITORY_ROOT).as_posix()
+        role_configuration_paths = (
+            REPOSITORY_ROOT / ".codex" / "agents" / "workflow-implementer.toml",
+            REPOSITORY_ROOT / ".codex" / "agents" / "workflow-integrator.toml",
+            REPOSITORY_ROOT / ".codex" / "agents" / "workflow-planner.toml",
+            REPOSITORY_ROOT / ".codex" / "agents" / "workflow-verify-reviewer.toml",
+        )
+
+        self.assertTrue(protocol_path.is_file(), f"缺少工作流协议文件：{protocol_relative_path}")
+        for role_configuration_path in role_configuration_paths:
+            self.assertIn(
+                protocol_relative_path,
+                role_configuration_path.read_text(encoding="utf-8"),
+                f"{role_configuration_path.relative_to(REPOSITORY_ROOT)} 必须声明工作流协议文件",
+            )
+
     def test_validate_accepts_a_planned_run(self) -> None:
         run_directory = self.copy_fixture("valid")
 
