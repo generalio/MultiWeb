@@ -77,6 +77,7 @@ class AgentWorkflowCliTest(unittest.TestCase):
             REPOSITORY_ROOT / "docs" / "agent-workflow.md",
             REPOSITORY_ROOT / "docs" / "agent-workflow-autonomous-handoff.md",
             REPOSITORY_ROOT / "docs" / "agent-workflow-task-template.md",
+            REPOSITORY_ROOT / ".codex" / "workflow" / "README.md",
         )
         role_configuration_paths = (
             REPOSITORY_ROOT / ".codex" / "agents" / "workflow-implementer.toml",
@@ -97,6 +98,18 @@ class AgentWorkflowCliTest(unittest.TestCase):
                 role_configuration_path.read_text(encoding="utf-8"),
                 f"{role_configuration_path.relative_to(REPOSITORY_ROOT)} 必须禁止默认阶段交接文档",
             )
+
+    def test_workflow_readme_describes_stop_option_validation_before_lock_acquisition(self) -> None:
+        workflow_readme = REPOSITORY_ROOT / ".codex" / "workflow" / "README.md"
+        content = workflow_readme.read_text(encoding="utf-8")
+
+        self.assertIn(
+            "在获取 `.workflow.lock` 前，`transition` 会先校验目标状态与 "
+            "`--stop-reason`、`--next-action` 的组合。",
+            content,
+        )
+        self.assertNotIn("三个命令都会先获取", content)
+        self.assertNotIn("├── handoffs/", content)
 
     def test_validate_accepts_a_planned_run(self) -> None:
         run_directory = self.copy_fixture("valid")

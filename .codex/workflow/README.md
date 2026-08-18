@@ -12,7 +12,17 @@ python3 tools/agent_workflow.py transition .codex/workflow/runs/<task-id> <NEXT_
 python3 tools/agent_workflow.py resume .codex/workflow/runs/<task-id>
 ```
 
-三个命令都会先获取运行目录内 `.workflow.lock` 的非阻塞 `fcntl` 租约。该能力要求 Unix-like 系统和 Python 3.11+，是当前的 P2 平台边界。租约被其他 Supervisor 持有时，命令会立即失败，不会读取或改写账本；`resume` 因此可确认不存在另一份有效租约。除这个运行时锁文件外，`resume` 完全只读，输出当前状态、阻断原因、唯一恢复目标和唯一下一步。
+默认不得生成或要求 `handoffs/` 阶段交接文档。只有维护者明确指出上下文超出并要求时，
+才允许创建并引用该目录中的文件。
+
+在获取 `.workflow.lock` 前，`transition` 会先校验目标状态与 `--stop-reason`、`--next-action` 的组合。
+目标为 `PAUSED` 或 `BLOCKED` 时，两项必须同时为非空单行；其他目标状态不得传入任一项。
+无效组合会在创建或获取锁前失败。通过该校验的 `transition`、`validate` 和 `resume` 会获取
+运行目录内 `.workflow.lock` 的非阻塞 `fcntl` 租约。该能力要求 Unix-like 系统和 Python 3.11+，
+是当前的 P2 平台边界。租约被其他 Supervisor 持有时，命令会立即失败，
+不会读取或改写账本；
+`resume` 因此可确认不存在另一份有效租约。除这个运行时锁文件外，`resume` 完全只读，
+输出当前状态、阻断原因、唯一恢复目标和唯一下一步。
 
 `validate` 检查状态字段、Git 可解析的基线/候选 SHA、任务契约、计划、完整事件链和审查证据。`transition` 仅接受状态机允许的下一状态：它先追加并 `fsync` 对应事件，再以同目录临时文件原子替换 `state.json`。如果事件追加失败，状态保持不变；如果替换在事件成功后中断，下一次 `validate` 会因事件末状态不一致而拒绝继续。
 
@@ -27,7 +37,6 @@ runs/<task-id>/
 ├── plan.json
 ├── events.jsonl                 # 首次迁移时创建
 ├── .workflow.lock                # 运行时租约文件，不写入任务数据
-├── handoffs/
 ├── candidate.sha                # 生成候选后必需
 ├── review-report.md             # REVIEWED 后必需
 └── resume.md                    # 可选的人类可读恢复上下文
