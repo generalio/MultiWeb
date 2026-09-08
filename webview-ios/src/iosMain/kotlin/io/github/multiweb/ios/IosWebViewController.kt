@@ -235,6 +235,10 @@ class IosWebViewController(
     }
     fileChooserCoordinator.dispose()
     view.stopLoading()
+    view.evaluateJavaScript(
+      "document.querySelectorAll('audio,video').forEach(function(media){media.pause();});",
+      completionHandler = null,
+    )
     view.navigationDelegate = null
     view.UIDelegate = null
     scriptBridgeInstallation.dispose()

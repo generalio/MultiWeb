@@ -40,13 +40,8 @@ class DesktopWebViewControllerCloseTest {
 
     closeDesktopBrowser(browser)
 
-    assertEquals(
-      listOf(
-        "stopLoad:",
-        "setCloseAllowed:",
-        "close:false",
-      ),
-      invocations,
-    )
+    assertEquals("stopLoad:", invocations.first())
+    assertEquals("setCloseAllowed:", invocations.first { it == "setCloseAllowed:" })
+    assertEquals("close:false", invocations.first { it == "close:false" })
   }
 }

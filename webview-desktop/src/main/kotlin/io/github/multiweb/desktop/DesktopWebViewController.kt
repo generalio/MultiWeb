@@ -859,6 +859,12 @@ internal class DesktopBrowserCloseLifecycle(
 /** 统一执行 JCEF 的非强制浏览器关闭顺序，供桌面控制器及回归测试复用。 */
 internal fun closeDesktopBrowser(browser: CefBrowser) {
   browser.stopLoad()
+  // 关闭页面前主动暂停媒体，避免 CEF 渲染进程在浏览器销毁异步完成期间继续播放。
+  browser.mainFrame?.executeJavaScript(
+    "document.querySelectorAll('audio,video').forEach(function(media){media.pause();});",
+    "multiweb://dispose",
+    0,
+  )
   browser.setCloseAllowed()
   browser.close(false)
 }
