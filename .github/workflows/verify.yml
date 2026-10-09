@@ -30,6 +30,8 @@ jobs:
 
       - name: 配置 Android SDK
         uses: android-actions/setup-android@v3
+        with:
+          packages: platform-tools
 
       - name: 安装 Android 编译平台
         run: sdkmanager "platforms;android-35" "build-tools;35.0.0"
