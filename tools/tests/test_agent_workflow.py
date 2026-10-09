@@ -99,6 +99,59 @@ class AgentWorkflowCliTest(unittest.TestCase):
                 f"{role_configuration_path.relative_to(REPOSITORY_ROOT)} 必须禁止默认阶段交接文档",
             )
 
+    def test_workflow_documents_and_role_configs_enforce_minimal_role_topology(self) -> None:
+        default_topology = "默认仅启动 `Planner -> 单一 Implementer -> Integrator -> Verify-Reviewer` 四个角色，并严格顺序执行。"
+        platform_agent_prohibition = "不得因 Android、iOS、Desktop、JS/Wasm 或测试平台自动创建、拆分或并发专项 Agent。"
+        second_implementer_approval = (
+            "第二个 Implementer 仅可由 Planner 在任务契约中书面批准，且必须同时满足范围不重叠、验证独立、"
+            "两个范围均不含 `webview-api`、`webview-extension-api`、API 基线、Gradle 设置、发布配置或跨平台契约；"
+            "同一任务最多两个 Implementer。"
+        )
+        integration_gate = "即使例外获批，也必须全体 Implementer 完成后才进入 Integrator。"
+        workflow_document_paths = (
+            REPOSITORY_ROOT / "AGENTS.md",
+            REPOSITORY_ROOT / "docs" / "agent-workflow.md",
+            REPOSITORY_ROOT / "docs" / "agent-workflow-autonomous-handoff.md",
+            REPOSITORY_ROOT / "docs" / "agent-workflow-task-template.md",
+            REPOSITORY_ROOT / ".codex" / "workflow" / "README.md",
+        )
+        role_configuration_paths = tuple(
+            sorted((REPOSITORY_ROOT / ".codex" / "agents").glob("workflow-*.toml"))
+        )
+
+        self.assertEqual(
+            tuple(path.name for path in role_configuration_paths),
+            (
+                "workflow-implementer.toml",
+                "workflow-integrator.toml",
+                "workflow-planner.toml",
+                "workflow-verify-reviewer.toml",
+            ),
+            "永久工作流角色配置必须精确为四个最小角色",
+        )
+        for policy in (
+            default_topology,
+            platform_agent_prohibition,
+            second_implementer_approval,
+            integration_gate,
+        ):
+            for path in (*workflow_document_paths, *role_configuration_paths):
+                self.assertIn(
+                    policy,
+                    path.read_text(encoding="utf-8"),
+                    f"{path.relative_to(REPOSITORY_ROOT)} 必须声明最小角色编排规则：{policy}",
+                )
+
+        task_template = (REPOSITORY_ROOT / "docs" / "agent-workflow-task-template.md").read_text(
+            encoding="utf-8"
+        )
+        planner_configuration = (
+            REPOSITORY_ROOT / ".codex" / "agents" / "workflow-planner.toml"
+        ).read_text(encoding="utf-8")
+        self.assertIn("- 角色编排：", task_template)
+        self.assertIn("- 第二个 Implementer：`不批准` / `批准`；", task_template)
+        self.assertIn("Planner 必须在任务契约中书面批准第二个 Implementer", planner_configuration)
+
     def test_workflow_readme_describes_stop_option_validation_before_lock_acquisition(self) -> None:
         workflow_readme = REPOSITORY_ROOT / ".codex" / "workflow" / "README.md"
         content = workflow_readme.read_text(encoding="utf-8")

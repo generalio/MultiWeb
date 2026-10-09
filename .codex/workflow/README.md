@@ -15,6 +15,13 @@ python3 tools/agent_workflow.py resume .codex/workflow/runs/<task-id>
 默认不得生成或要求 `handoffs/` 阶段交接文档。只有维护者明确指出上下文超出并要求时，
 才允许创建并引用该目录中的文件。
 
+## 最小角色编排
+
+默认仅启动 `Planner -> 单一 Implementer -> Integrator -> Verify-Reviewer` 四个角色，并严格顺序执行。
+不得因 Android、iOS、Desktop、JS/Wasm 或测试平台自动创建、拆分或并发专项 Agent。
+第二个 Implementer 仅可由 Planner 在任务契约中书面批准，且必须同时满足范围不重叠、验证独立、两个范围均不含 `webview-api`、`webview-extension-api`、API 基线、Gradle 设置、发布配置或跨平台契约；同一任务最多两个 Implementer。
+即使例外获批，也必须全体 Implementer 完成后才进入 Integrator。
+
 在获取 `.workflow.lock` 前，`transition` 会先校验目标状态与 `--stop-reason`、`--next-action` 的组合。
 目标为 `PAUSED` 或 `BLOCKED` 时，两项必须同时为非空单行；其他目标状态不得传入任一项。
 无效组合会在创建或获取锁前失败。通过该校验的 `transition`、`validate` 和 `resume` 会获取

@@ -10,5 +10,10 @@ developer_instructions = """
 只有维护者明确指出上下文超出并要求时，才允许创建并引用该目录中的文件。
 任务契约、计划、候选 SHA 和审查报告是账本或门禁证据，不属于交接文档。
 
+默认仅启动 `Planner -> 单一 Implementer -> Integrator -> Verify-Reviewer` 四个角色，并严格顺序执行。
+不得因 Android、iOS、Desktop、JS/Wasm 或测试平台自动创建、拆分或并发专项 Agent。
+第二个 Implementer 仅可由 Planner 在任务契约中书面批准，且必须同时满足范围不重叠、验证独立、两个范围均不含 `webview-api`、`webview-extension-api`、API 基线、Gradle 设置、发布配置或跨平台契约；同一任务最多两个 Implementer。
+即使例外获批，也必须全体 Implementer 完成后才进入 Integrator。
+
 不得写入候选代码、测试、API 基线、任务契约或账本，不得修改任何内容来制造 PASS，不得替 Integrator 处理语义冲突，也不得创建提交、推送或创建 PR。将审查报告仅返回 Supervisor；只能由 Supervisor 使用临时文件后原子替换落盘。
 """

@@ -9,6 +9,15 @@
 Planner 判定 `TRIVIAL` 时必须在任务契约中说明理由、独占范围和快速路径验证命令。不能启动所需角色、发现语义冲突、
 P0/P1、候选 SHA 变化或需要 GitHub/凭据授权时，Supervisor 必须暂停或阻断并记录唯一下一步，不能以单 Agent 静默完成。
 
+## 最小角色编排
+
+默认仅启动 `Planner -> 单一 Implementer -> Integrator -> Verify-Reviewer` 四个角色，并严格顺序执行。
+不得因 Android、iOS、Desktop、JS/Wasm 或测试平台自动创建、拆分或并发专项 Agent。
+第二个 Implementer 仅可由 Planner 在任务契约中书面批准，且必须同时满足范围不重叠、验证独立、两个范围均不含 `webview-api`、`webview-extension-api`、API 基线、Gradle 设置、发布配置或跨平台契约；同一任务最多两个 Implementer。
+即使例外获批，也必须全体 Implementer 完成后才进入 Integrator。
+
+Planner 必须在任务契约中书面批准第二个 Implementer，并记录两个范围、独立验证以及敏感模块排除条件；否则保持单一 Implementer。
+
 ## 账本与状态
 
 每个任务使用 `.codex/workflow/runs/<task-id>/`，只保存公开的状态、相对证据路径和 Git SHA：
