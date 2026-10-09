@@ -4,6 +4,7 @@ import java.lang.reflect.Proxy
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import org.cef.browser.CefBrowser
+import org.cef.browser.CefFrame
 
 class DesktopWebViewControllerCloseTest {
 
@@ -28,20 +29,44 @@ class DesktopWebViewControllerCloseTest {
   }
 
   @Test
-  fun `关闭浏览器会先允许正常关闭而非强制终止`() {
+  fun `关闭浏览器先暂停顶层媒体再允许正常关闭`() {
     val invocations = mutableListOf<String>()
-    val browser = Proxy.newProxyInstance(
+    val frame = Proxy.newProxyInstance(
+      CefFrame::class.java.classLoader,
+      arrayOf(CefFrame::class.java),
+    ) { _, method, arguments ->
+      if (method.name == "executeJavaScript") {
+        assertEquals(
+          "document.querySelectorAll('audio,video').forEach(function(media){media.pause();});",
+          arguments!![0],
+        )
+        assertEquals("multiweb://dispose", arguments[1])
+        assertEquals(0, arguments[2])
+        invocations += "pauseMedia"
+      }
+      null
+    } as CefFrame
+
+    closeDesktopBrowser(browser(invocations, frame))
+
+    assertEquals(listOf("stopLoad", "getMainFrame", "pauseMedia", "setCloseAllowed", "close:false"), invocations)
+  }
+
+  @Test
+  fun `尚无主框架的浏览器也正常关闭`() {
+    val invocations = mutableListOf<String>()
+
+    closeDesktopBrowser(browser(invocations, null))
+
+    assertEquals(listOf("stopLoad", "getMainFrame", "setCloseAllowed", "close:false"), invocations)
+  }
+
+  private fun browser(invocations: MutableList<String>, frame: CefFrame?): CefBrowser =
+    Proxy.newProxyInstance(
       CefBrowser::class.java.classLoader,
       arrayOf(CefBrowser::class.java),
     ) { _, method, arguments ->
-      invocations += "${method.name}:${arguments?.joinToString() ?: ""}"
-      null
+      invocations += if (method.name == "close") "close:${arguments!![0]}" else method.name
+      if (method.name == "getMainFrame") frame else null
     } as CefBrowser
-
-    closeDesktopBrowser(browser)
-
-    assertEquals("stopLoad:", invocations.first())
-    assertEquals("setCloseAllowed:", invocations.first { it == "setCloseAllowed:" })
-    assertEquals("close:false", invocations.first { it == "close:false" })
-  }
 }
