@@ -214,8 +214,8 @@ private fun <Element> identitySet(): MutableSet<Element> {
 /**
  * 协调 Compose 控制器、CEF 与宿主应用的受控退出顺序。
  *
- * 所有方法必须在 Swing EDT 调用。每个控制器仍通过自身的 `close(false)` 正常关闭；只有全部原生
- * `onBrowserClosed` 回调到达后才释放进程级 CEF，最后等待 [CefApp.CefAppState.TERMINATED] 再交还给宿主退出。
+ * 所有方法必须在 Swing EDT 调用。每个控制器先暂停媒体再强制关闭；客户端完整释放并发出全部
+ * `onBrowserClosed` 确认后才释放进程级 CEF，最后等待 [CefApp.CefAppState.TERMINATED] 再交还给宿主退出。
  */
 internal class DesktopApplicationExitCoordinator<Controller>(
   private val cefApplication: DesktopCefApplication,

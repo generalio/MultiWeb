@@ -164,6 +164,61 @@ class DesktopWebViewRuntimeTest {
   }
 
   @Test
+  fun `普通页面关闭不销毁 CEF 且可再次注册控制器`() {
+    val cefApplication = FakeDesktopCefApplication()
+    val disposedControllers = mutableListOf<Any>()
+    val coordinator = DesktopApplicationExitCoordinator(
+      cefApplication = cefApplication,
+      disposeController = disposedControllers::add,
+      createTerminationPoller = { error("普通关闭不应启动终止轮询") },
+    )
+    coordinator.bindApplicationExit { error("普通关闭不应退出应用") }
+    val first = Any()
+    val second = Any()
+    coordinator.register(first)
+
+    coordinator.unregister(first)
+    coordinator.onControllerClosed(first)
+    assertEquals(0, cefApplication.disposeCount)
+    assertTrue(disposedControllers.isEmpty())
+
+    coordinator.register(second)
+    coordinator.requestApplicationExit()
+    assertEquals(listOf(second), disposedControllers)
+    assertEquals(0, cefApplication.disposeCount)
+  }
+
+  @Test
+  fun `退出期间晚注册的控制器立即释放且等待其准确关闭确认`() {
+    val cefApplication = FakeDesktopCefApplication(state = org.cef.CefApp.CefAppState.TERMINATED)
+    val disposedControllers = mutableListOf<Any>()
+    var exitCount = 0
+    val coordinator = DesktopApplicationExitCoordinator(
+      cefApplication = cefApplication,
+      disposeController = disposedControllers::add,
+      createTerminationPoller = { error("已终止的 CEF 不应启动轮询") },
+    )
+    coordinator.bindApplicationExit { exitCount++ }
+    val first = Any()
+    val late = Any()
+    coordinator.register(first)
+    coordinator.requestApplicationExit()
+    coordinator.register(late)
+    assertEquals(listOf(first, late), disposedControllers)
+
+    coordinator.onControllerClosed(first)
+    coordinator.onControllerClosed(first)
+    coordinator.onControllerClosed(Any())
+    assertEquals(0, cefApplication.disposeCount)
+    assertEquals(0, exitCount)
+
+    coordinator.onControllerClosed(late)
+    coordinator.onControllerClosed(late)
+    assertEquals(1, cefApplication.disposeCount)
+    assertEquals(1, exitCount)
+  }
+
+  @Test
   fun `CEF 不可用时停止终止轮询且不伪造应用退出`() {
     val cefApplication = FakeDesktopCefApplication()
     val pollers = mutableListOf<FakeDesktopTerminationPoller>()

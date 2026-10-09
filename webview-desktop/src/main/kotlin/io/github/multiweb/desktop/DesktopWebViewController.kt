@@ -36,6 +36,7 @@ import kotlinx.coroutines.flow.asStateFlow
 import java.awt.Component
 import java.util.concurrent.ConcurrentHashMap
 import javax.swing.SwingUtilities
+import javax.swing.Timer
 import org.cef.CefApp
 import org.cef.CefClient
 import org.cef.browser.CefBrowser
@@ -137,9 +138,12 @@ class DesktopWebViewController(
   var isDisposed: Boolean = false
     private set
 
-  /** JCEF 客户端只能在 [CefLifeSpanHandlerAdapter.onBeforeClose] 后释放，防止原生浏览器仍在关闭时访问已释放对象。 */
-  @Volatile
-  private var isClientDisposed: Boolean = false
+  /** 原生回调仅排队；客户端释放与宿主通知在 EDT 上串行完成。 */
+  private val browserCloseCompletion = DesktopBrowserCloseCompletion(
+    disposeClient = { client.dispose() },
+    onBrowserClosed = onBrowserClosed,
+    getBrowsers = { desktopClientBrowserSnapshot.invoke(client) as Array<*> },
+  )
 
   /** JCEF 回调可能来自非 EDT 线程，使用 StateFlow 安全发布状态快照给宿主。 */
   private val mutableState = MutableStateFlow(WebViewState())
@@ -296,28 +300,20 @@ class DesktopWebViewController(
   }
 
   /**
-   * 按 JCEF 的正常关闭路径释放当前浏览器。
+   * 释放当前浏览器并等待原生关闭确认。
    *
-   * macOS 的 windowed JCEF 会在关闭过程中移除 AppKit 事件监听。`close(true)` 会跳过浏览器的
-   * 关闭协商，可能与 Compose/AWT 正在处理的事件竞争；先显式允许关闭，再以非强制方式关闭，最终仍由
-   * [CefLifeSpanHandlerAdapter.onBeforeClose] 释放 Client。
+   * dispose 已承诺销毁资源，必须强制关闭，避免 beforeunload 取消后宿主永久等待关闭确认。
+   * 客户端仍需等到 onBeforeClose 后排队释放，不能在原生回调持锁期间同步清理。
    */
   private fun closeBrowser() {
     closeDesktopBrowser(browser)
   }
 
   /**
-   * Compose 页面可能在原生视图首次 showing 前离开组合；此时没有可关闭的 JCEF Browser，直接释放 Client 并通知宿主。
-   *
-   * 不能等待 `onBeforeClose`：未创建的浏览器不会产生该回调，应用退出协调器会因此永久等待控制器关闭确认。
+   * 首次 showing 前未发起创建时不会收到 onBeforeClose，复用同一排队完成路径释放客户端并通知宿主。
    */
   private fun disposeUncreatedBrowser() {
-    if (isClientDisposed) {
-      return
-    }
-    isClientDisposed = true
-    client.dispose()
-    SwingUtilities.invokeLater(onBrowserClosed)
+    browserCloseCompletion.complete()
   }
 
   private fun configureClient(client: CefClient) {
@@ -406,14 +402,7 @@ class DesktopWebViewController(
       }
 
       override fun onBeforeClose(closedBrowser: CefBrowser) {
-        if (closedBrowser !== browser || isClientDisposed) {
-          return
-        }
-        isClientDisposed = true
-        client.dispose()
-        SwingUtilities.invokeLater {
-          onBrowserClosed()
-        }
+        browserCloseCompletion.onBeforeClose(closedBrowser, browser)
       }
     }
   }
@@ -856,7 +845,68 @@ internal class DesktopBrowserCloseLifecycle(
   }
 }
 
-/** 统一执行 JCEF 的非强制浏览器关闭顺序，供桌面控制器及回归测试复用。 */
+/**
+ * 固定 JCEF 的公开 API 没有客户端清理完成信号；此受保护快照在 browser_ 锁内复制集合。
+ * 只有取得空快照才能确认原生 cleanupBrowser 已释放集合锁；反射失败直接阻断完成，不降级为提前通知。
+ */
+private val desktopClientBrowserSnapshot by lazy {
+  CefClient::class.java.getDeclaredMethod("getAllBrowser").apply { isAccessible = true }
+}
+
+/**
+ * 将客户端清理移出原生关闭回调的持锁栈，避免 AppKit 与 EDT 争用 CefApp 和浏览器集合锁。
+ *
+ * 即使调用来自 EDT 也必须排队；去重状态仅在 EDT 队列中访问。清理失败时不发送关闭确认，也不重复清理。
+ */
+internal class DesktopBrowserCloseCompletion(
+  private val disposeClient: () -> Unit,
+  private val onBrowserClosed: () -> Unit,
+  private val getBrowsers: () -> Array<*> = { emptyArray<Any>() },
+  private val scheduleOnEdt: (() -> Unit) -> Unit = { SwingUtilities.invokeLater(it) },
+  private val scheduleCleanupCheck: (() -> Unit) -> Unit = { action ->
+    Timer(10) { action() }.apply {
+      isRepeats = false
+      start()
+    }
+  },
+) {
+  private var isCompletionStarted = false
+
+  /** 先核对原生浏览器身份，其他浏览器的回调不能触发本客户端清理。 */
+  fun onBeforeClose(closedBrowser: CefBrowser, expectedBrowser: CefBrowser) {
+    if (closedBrowser === expectedBrowser) {
+      enqueueCompletion(waitForNativeCleanup = true)
+    }
+  }
+
+  /** 未创建分支与原生关闭回调共用同一次排队清理。 */
+  fun complete() {
+    enqueueCompletion(waitForNativeCleanup = false)
+  }
+
+  private fun enqueueCompletion(waitForNativeCleanup: Boolean) {
+    scheduleOnEdt {
+      check(SwingUtilities.isEventDispatchThread())
+      if (!isCompletionStarted) {
+        isCompletionStarted = true
+        finishWhenNativeCleanupCompleted(waitForNativeCleanup)
+      }
+    }
+  }
+
+  private fun finishWhenNativeCleanupCompleted(waitForNativeCleanup: Boolean) {
+    check(SwingUtilities.isEventDispatchThread())
+    // dispose 在集合非空时仅请求关闭便返回，必须先等原生条目移除，不能以方法返回冒充资源释放完成。
+    if (waitForNativeCleanup && getBrowsers().isNotEmpty()) {
+      scheduleCleanupCheck { finishWhenNativeCleanupCompleted(waitForNativeCleanup = true) }
+      return
+    }
+    disposeClient()
+    onBrowserClosed()
+  }
+}
+
+/** 先暂停媒体再强制关闭；资源释放承诺不能被网页 beforeunload 取消。 */
 internal fun closeDesktopBrowser(browser: CefBrowser) {
   browser.stopLoad()
   // 关闭页面前主动暂停媒体，避免 CEF 渲染进程在浏览器销毁异步完成期间继续播放。
@@ -866,5 +916,5 @@ internal fun closeDesktopBrowser(browser: CefBrowser) {
     0,
   )
   browser.setCloseAllowed()
-  browser.close(false)
+  browser.close(true)
 }
