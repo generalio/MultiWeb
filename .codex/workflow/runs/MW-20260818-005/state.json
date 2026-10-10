@@ -1,0 +1,20 @@
+{
+  "schemaVersion": 1,
+  "taskId": "MW-20260818-005",
+  "baselineSha": "4320a062d641c84c9ed5ec67e1af09551f62d430",
+  "status": "PR_READY",
+  "mode": "FULL",
+  "currentStage": "PR",
+  "attempts": {
+    "PLANNING": 1,
+    "IMPLEMENTING": 2,
+    "VALIDATING": 2,
+    "REVIEWING": 2
+  },
+  "candidateSha": "3ba4d6d41c327650ace3555aebc832cce1e71275",
+  "verdict": "PASS",
+  "nextAction": "由 Planner 审核 PR 汇总证据契约",
+  "lastEventAt": "2026-08-18T04:32:02.260838+00:00",
+  "stopReason": null,
+  "reviewedCandidateSha": "3ba4d6d41c327650ace3555aebc832cce1e71275"
+}

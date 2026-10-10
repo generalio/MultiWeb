@@ -4,6 +4,12 @@ on:
   push:
     tags:
       - "v[0-9]+.[0-9]+.[0-9]+"
+  workflow_dispatch:
+    inputs:
+      release_tag:
+        description: "要重试发布的现有 vX.Y.Z 标签"
+        required: true
+        type: string
 
 permissions:
   contents: read
@@ -16,6 +22,8 @@ jobs:
     steps:
       - name: 检出发布标签
         uses: actions/checkout@v4
+        with:
+          ref: refs/tags/${{ inputs.release_tag || github.ref_name }}
 
       - name: 配置 JDK 17
         uses: actions/setup-java@v4
@@ -26,6 +34,8 @@ jobs:
 
       - name: 配置 Android SDK
         uses: android-actions/setup-android@v3
+        with:
+          packages: platform-tools
 
       - name: 安装 Android 编译平台
         run: sdkmanager "platforms;android-35" "build-tools;35.0.0"
@@ -33,11 +43,16 @@ jobs:
       - name: 校验发布标签版本
         id: version
         env:
-          TAG_NAME: ${{ github.ref_name }}
+          TAG_NAME: ${{ inputs.release_tag || github.ref_name }}
         run: |
           version="${TAG_NAME#v}"
           if [[ ! "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
             echo "发布标签必须为 vX.Y.Z，当前为：$TAG_NAME" >&2
+            exit 1
+          fi
+          tag_commit="$(git rev-parse --verify "refs/tags/$TAG_NAME^{commit}")"
+          if [[ "$(git rev-parse HEAD)" != "$tag_commit" ]]; then
+            echo "检出的提交与发布标签不一致：$TAG_NAME" >&2
             exit 1
           fi
           echo "value=$version" >> "$GITHUB_OUTPUT"

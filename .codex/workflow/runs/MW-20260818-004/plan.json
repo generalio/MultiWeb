@@ -1,0 +1,49 @@
+{
+  "schemaVersion": 1,
+  "taskId": "MW-20260818-004",
+  "baselineSha": "8605c85e838507df677383bbf154ff6b665e21ea",
+  "tasks": [
+    {
+      "id": "planner-review",
+      "owner": "WORKFLOW_PLANNER",
+      "scope": ["read-only workflow governance review"],
+      "dependsOn": [],
+      "verification": ["contract completeness review"]
+    },
+    {
+      "id": "single-implementer-change",
+      "owner": "WORKFLOW_IMPLEMENTER",
+      "scope": [
+        "AGENTS.md",
+        "docs/agent-workflow.md",
+        "docs/agent-workflow-autonomous-handoff.md",
+        "docs/agent-workflow-task-template.md",
+        ".codex/agents/workflow-*.toml",
+        ".codex/workflow/README.md",
+        "tools/tests/test_agent_workflow.py"
+      ],
+      "dependsOn": ["planner-review"],
+      "verification": ["focused Python workflow tests", "git diff --check"]
+    },
+    {
+      "id": "integration",
+      "owner": "WORKFLOW_INTEGRATOR",
+      "scope": ["authorized implementation diff only"],
+      "dependsOn": ["single-implementer-change"],
+      "verification": ["candidate commit", "git diff --check"]
+    },
+    {
+      "id": "fixed-candidate-review",
+      "owner": "WORKFLOW_VERIFY_REVIEWER",
+      "scope": ["fixed candidate governance and regression review"],
+      "dependsOn": ["integration"],
+      "verification": ["focused Python workflow tests", "fixed-SHA review"]
+    }
+  ],
+  "acceptanceCriteria": [
+    "默认角色链路固定为 Planner、单一 Implementer、Integrator、Verify-Reviewer，顺序执行。",
+    "不得按 Android、iOS、Desktop、JS/Wasm 自动拆分 Agent。",
+    "只有 Planner 书面批准且范围、验证和敏感模块约束满足时，才允许第二个 Implementer；本任务不批准该例外。",
+    "协议和角色配置的约束具有静态回归覆盖。"
+  ]
+}

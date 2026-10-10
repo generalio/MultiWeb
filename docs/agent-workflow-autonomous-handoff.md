@@ -16,6 +16,11 @@ Supervisor 负责创建 `.codex/workflow/runs/<task-id>/` 账本、按既有状�
 Planner 仅做只读分析，向 Supervisor 返回任务契约、基线 SHA、任务 DAG、独占文件或模块、依赖、最小验证命令、验收
 标准，以及公共 API、平台和安全默认值影响。`TRIVIAL` 契约必须写明理由、独占范围和快速路径验证命令。
 
+默认仅启动 `Planner -> 单一 Implementer -> Integrator -> Verify-Reviewer` 四个角色，并严格顺序执行。
+不得因 Android、iOS、Desktop、JS/Wasm 或测试平台自动创建、拆分或并发专项 Agent。
+第二个 Implementer 仅可由 Planner 在任务契约中书面批准，且必须同时满足范围不重叠、验证独立、两个范围均不含 `webview-api`、`webview-extension-api`、API 基线、Gradle 设置、发布配置或跨平台契约；同一任务最多两个 Implementer。
+即使例外获批，也必须全体 Implementer 完成后才进入 Integrator。
+
 Implementer 只能在独立 worktree 内修改任务契约明确授权且由其独占的范围。返回给 Supervisor
 的阶段信息至少包含：任务和基线、实际修改文件与所有权映射、可应用 diff 或 worktree、
 执行命令及退出结果、未验证范围，以及公共 API、跨平台差异和安全默认值影响。
