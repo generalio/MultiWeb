@@ -92,7 +92,7 @@ object DesktopWebViewRuntime {
    * 请求应用按受控顺序退出。
    *
    * 该方法可用于 `Window.onCloseRequest`，也由 macOS 的 [createMacOsTerminationHandler] 调用。重复请求会被忽略；
-   * 浏览器始终通过既有的非强制 `close(false)` 路径关闭。
+   * 浏览器先暂停媒体并允许关闭，再通过强制 `close(true)` 路径完成资源销毁。
    */
   fun requestApplicationExit() {
     runOnSwingEdt {
@@ -364,8 +364,10 @@ internal class DesktopWebViewRuntimeConfiguration(
 
   /** 按准确的控制器身份处理 JCEF onBeforeClose 回调。 */
   fun onControllerClosed(controller: DesktopWebViewController) {
-    onBrowserClosed()
-    applicationExitCoordinator.onControllerClosed(controller)
+    notifyDesktopBrowserClosed(
+      onBrowserClosed = onBrowserClosed,
+      acknowledgeControllerClosed = { applicationExitCoordinator.onControllerClosed(controller) },
+    )
   }
 
   /** 绑定 CEF 终止后的宿主应用退出回调。 */
@@ -376,6 +378,18 @@ internal class DesktopWebViewRuntimeConfiguration(
   /** 请求由运行时协调所有 Compose 控制器和 CEF 的正常退出。 */
   fun requestApplicationExit() {
     applicationExitCoordinator.requestApplicationExit()
+  }
+}
+
+/** 兼容关闭通知失败时仍必须确认控制器已关闭，同时保留原异常传播语义。 */
+internal fun notifyDesktopBrowserClosed(
+  onBrowserClosed: () -> Unit,
+  acknowledgeControllerClosed: () -> Unit,
+) {
+  try {
+    onBrowserClosed()
+  } finally {
+    acknowledgeControllerClosed()
   }
 }
 

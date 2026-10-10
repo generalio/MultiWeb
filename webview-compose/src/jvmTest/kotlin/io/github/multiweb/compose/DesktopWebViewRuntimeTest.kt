@@ -219,6 +219,36 @@ class DesktopWebViewRuntimeTest {
   }
 
   @Test
+  fun `兼容关闭回调异常时仍确认控制器关闭并完成退出`() {
+    val cefApplication = FakeDesktopCefApplication(
+      state = org.cef.CefApp.CefAppState.TERMINATED,
+    )
+    var exitCount = 0
+    val controller = Any()
+    val coordinator = DesktopApplicationExitCoordinator<Any>(
+      cefApplication = cefApplication,
+      disposeController = {},
+      createTerminationPoller = { error("已终止的 CEF 不应启动轮询") },
+    )
+    coordinator.bindApplicationExit { exitCount++ }
+    coordinator.register(controller)
+    coordinator.requestApplicationExit()
+    val failure = IllegalStateException("legacy callback failed")
+
+    assertEquals(
+      failure,
+      kotlin.test.assertFailsWith<IllegalStateException> {
+        notifyDesktopBrowserClosed(
+          onBrowserClosed = { throw failure },
+          acknowledgeControllerClosed = { coordinator.onControllerClosed(controller) },
+        )
+      },
+    )
+    assertEquals(1, cefApplication.disposeCount)
+    assertEquals(1, exitCount)
+  }
+
+  @Test
   fun `CEF 不可用时停止终止轮询且不伪造应用退出`() {
     val cefApplication = FakeDesktopCefApplication()
     val pollers = mutableListOf<FakeDesktopTerminationPoller>()
