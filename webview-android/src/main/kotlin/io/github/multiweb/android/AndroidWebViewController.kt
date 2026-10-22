@@ -131,6 +131,8 @@ class AndroidWebViewController(
    * 生命周期回调更新，并在释放时清空，避免向上一个页面或未知页面提交脚本。
    */
   private var currentMainFrameUrl: String? = null
+  /** 仅旧内核保留延后注入脚本，现代内核仍在文档开始阶段安装。 */
+  private var deferredBridgeFacades: List<String> = emptyList()
 
   init {
     checkMainThread()
@@ -260,6 +262,7 @@ class AndroidWebViewController(
     // 先切换状态，保证扩展释放过程中不能再向即将销毁的 WebView 提交脚本。
     isDisposed = true
     currentMainFrameUrl = null
+    deferredBridgeFacades = emptyList()
     extensions.filterIsInstance<WebViewControllerLifecycleExtension>().forEach { extension ->
       extension.onControllerDisposed()
     }
@@ -338,7 +341,7 @@ class AndroidWebViewController(
       }
       false
     }
-    AndroidScriptBridgeInstaller.install(
+    deferredBridgeFacades = AndroidScriptBridgeInstaller.install(
       webView = webView,
       javaScriptEnabled = config.javaScriptEnabled,
       bridges = extensions.flatMap(WebViewExtension::scriptBridges),
@@ -368,6 +371,7 @@ class AndroidWebViewController(
 
       override fun onPageStarted(view: WebView, url: String?, favicon: android.graphics.Bitmap?) {
         currentMainFrameUrl = url
+        AndroidScriptBridgeInstaller.injectDeferredFacades(view, deferredBridgeFacades)
         state = state.copy(
           url = url ?: state.url,
           isLoading = true,
@@ -381,6 +385,7 @@ class AndroidWebViewController(
 
       override fun onPageFinished(view: WebView, url: String?) {
         currentMainFrameUrl = url
+        AndroidScriptBridgeInstaller.injectDeferredFacades(view, deferredBridgeFacades)
         state = state.copy(
           url = url ?: state.url,
           loadingProgress = 1f,

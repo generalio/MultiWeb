@@ -25,19 +25,23 @@ import java.net.URI
  * `file:`、`data:` 与自定义 Scheme 的请求。
  */
 internal object AndroidScriptBridgeInstaller {
+  /** 返回旧内核需在主文档回调中补注入的门面；不支持安全消息通道时只保留浏览。 */
   fun install(
     webView: WebView,
     javaScriptEnabled: Boolean,
     bridges: List<ScriptBridge>,
-  ) {
+    isFeatureSupported: (String) -> Boolean = WebViewFeature::isFeatureSupported,
+  ): List<String> {
     if (!shouldInstallScriptBridges(javaScriptEnabled, bridges)) {
-      return
+      return emptyList()
     }
-    require(WebViewFeature.isFeatureSupported(WebViewFeature.WEB_MESSAGE_LISTENER)) {
-      "当前 Android System WebView 不支持受限来源 JS 桥。"
+    val configurations = AndroidScriptBridgeConfiguration.create(bridges)
+    if (!isFeatureSupported(WebViewFeature.WEB_MESSAGE_LISTENER)) {
+      return emptyList()
     }
 
-    AndroidScriptBridgeConfiguration.create(bridges).forEach { configuration ->
+    val deferredFacades = mutableListOf<String>()
+    configurations.forEach { configuration ->
       WebViewCompat.addWebMessageListener(
         webView,
         configuration.transportName,
@@ -45,16 +49,23 @@ internal object AndroidScriptBridgeInstaller {
         AndroidScriptBridgeListener(configuration),
       )
       configuration.facadeInjectionScript()?.let { script ->
-        require(WebViewFeature.isFeatureSupported(WebViewFeature.DOCUMENT_START_SCRIPT)) {
-          "当前 Android System WebView 不支持文档开始阶段的 JS 桥门面。"
+        if (isFeatureSupported(WebViewFeature.DOCUMENT_START_SCRIPT)) {
+          WebViewCompat.addDocumentStartJavaScript(
+            webView,
+            script,
+            configuration.allowedOriginRules,
+          )
+        } else {
+          deferredFacades += script
         }
-        WebViewCompat.addDocumentStartJavaScript(
-          webView,
-          script,
-          configuration.allowedOriginRules,
-        )
       }
     }
+    return deferredFacades
+  }
+
+  /** 旧内核只能尽力提前注入并在加载完成时补注入，无法保证先于网页首段脚本运行。 */
+  fun injectDeferredFacades(webView: WebView, scripts: List<String>) {
+    scripts.forEach { script -> webView.evaluateJavascript(script, null) }
   }
 }
 
@@ -83,7 +94,12 @@ internal data class AndroidScriptBridgeConfiguration(
   fun facadeInjectionScript(): String? {
     val bridgeFacade = facade ?: return null
     val originCheck = when (originPolicy) {
-      is ScriptBridgeOriginPolicy.ExactHttpsHosts -> "window.top === window"
+      is ScriptBridgeOriginPolicy.ExactHttpsHosts -> {
+        val hosts = allowedHosts.joinToString(",") { it.toJavaScriptString() }
+        "window.top === window && window.location.protocol === 'https:' && " +
+          "(window.location.port === '' || window.location.port === '443') && " +
+          "[$hosts].indexOf(window.location.hostname.toLowerCase()) !== -1"
+      }
       ScriptBridgeOriginPolicy.UnsafeAnyHttpOrHttps -> {
         "window.top === window && (window.location.protocol === 'http:' || " +
           "window.location.protocol === 'https:') && window.location.hostname.length > 0"
@@ -95,6 +111,7 @@ internal data class AndroidScriptBridgeConfiguration(
     return """
       (function() {
         if (!($originCheck)) return;
+        if (Object.prototype.hasOwnProperty.call(window, ${bridge.name.toJavaScriptString()})) return;
         var nativeBridge = window[${transportName.toJavaScriptString()}];
         if (!nativeBridge || typeof nativeBridge.postMessage !== 'function') return;
         var sequence = 0;
