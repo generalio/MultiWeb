@@ -2,9 +2,9 @@
   "schemaVersion": 1,
   "taskId": "MW-20261022-webview-js",
   "baselineSha": "849bd8c18632fe42766d9735ad23c816e2d02694",
-  "status": "COMMIT_READY",
+  "status": "PR_READY",
   "mode": "FULL",
-  "currentStage": "COMMITTING",
+  "currentStage": "PR",
   "attempts": {
     "PLANNING": 1,
     "IMPLEMENTING": 1,
@@ -14,7 +14,7 @@
   "candidateSha": "5dc2581db3365cf328dbae33dfc0b3a17bd70812",
   "verdict": "PASS",
   "nextAction": "启动Implementer",
-  "lastEventAt": "2026-10-22T18:21:20.293747+00:00",
+  "lastEventAt": "2026-10-22T18:29:19.741658+00:00",
   "stopReason": null,
   "reviewedCandidateSha": "5dc2581db3365cf328dbae33dfc0b3a17bd70812"
 }

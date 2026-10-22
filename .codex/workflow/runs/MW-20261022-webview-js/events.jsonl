@@ -3,3 +3,4 @@
 {"actor": "INTEGRATOR", "at": "2026-10-22T18:15:53.256797+00:00", "evidence": "candidate.sha", "from": "READY_TO_INTEGRATE", "summary": "状态迁移已验证", "to": "VALIDATING"}
 {"actor": "VERIFY_REVIEWER", "at": "2026-10-22T18:21:20.228347+00:00", "evidence": "review-report.md", "from": "VALIDATING", "summary": "状态迁移已验证", "to": "REVIEWED"}
 {"actor": "SUPERVISOR", "at": "2026-10-22T18:21:20.293747+00:00", "evidence": "review-report.md", "from": "REVIEWED", "summary": "状态迁移已验证", "to": "COMMIT_READY"}
+{"actor": "SUPERVISOR", "at": "2026-10-22T18:29:19.741658+00:00", "evidence": "review-report.md", "from": "COMMIT_READY", "summary": "状态迁移已验证", "to": "PR_READY"}
