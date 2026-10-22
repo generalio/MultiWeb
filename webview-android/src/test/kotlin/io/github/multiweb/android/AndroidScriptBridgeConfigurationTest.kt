@@ -45,7 +45,12 @@ class AndroidScriptBridgeConfigurationTest {
       ),
     ).single()
 
-    assertContains(requireNotNull(configuration.facadeInjectionScript()), "window.top === window")
+    val script = requireNotNull(configuration.facadeInjectionScript())
+    assertContains(script, "window.top === window")
+    assertContains(script, "window.location.protocol === 'https:'")
+    assertContains(script, "window.location.port === '443'")
+    assertContains(script, "window.location.hostname.toLowerCase()")
+    assertContains(script, "Object.prototype.hasOwnProperty.call(window, \"TrustedBridge\")")
   }
 
   @Test
