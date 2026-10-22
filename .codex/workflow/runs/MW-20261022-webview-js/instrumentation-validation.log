@@ -1,0 +1,161 @@
+Starting a Gradle Daemon, 1 stopped Daemon could not be reused, use --status for details
+Daemon JVM discovery is an incubating feature.
+
+> Configure project :sample-compose
+w: ⚠️ Deprecated Gradle Version
+The used Gradle version (Gradle 8.10.2) is deprecated and will not be supported in future Kotlin Gradle Plugin releases.
+The minimum supported Gradle version will become Gradle 8.14.4 in Kotlin 2.5.0.
+
+This warning can be suppressed in 'gradle.properties':
+    kotlin.suppressGradlePluginWarnings=DeprecatedGradleVersionWarning
+Solution: Please update the Gradle version to at least Gradle 8.14.4.
+
+w: ⚠️ Native task 'iosX64Test' is disabled
+Task 'iosX64Test' for target 'ios_x64' cannot run on the current host (macos-aarch64).
+Reason: architecture mismatch - target requires X64, current host is ARM64
+Solution: To suppress this warning, add 'kotlin.native.ignoreDisabledTargets=true' to gradle.properties.
+
+w: ⚠️ Deprecated Gradle Property 'kotlin.mpp.androidSourceSetLayoutVersion' Used
+The `kotlin.mpp.androidSourceSetLayoutVersion` deprecated property is used in your build.
+Solutions:
+ * It is unsupported, please stop using it.
+ * Android Source Set Layout V2 is enabled by default and can't be changed. Leave your questions here https://youtrack.jetbrains.com/issue/KT-82265
+
+
+> Task :build-logic:checkKotlinGradlePluginConfigurationErrors
+> Task :build-logic:generateExternalPluginSpecBuilders UP-TO-DATE
+> Task :build-logic:extractPrecompiledScriptPluginPlugins UP-TO-DATE
+> Task :build-logic:compilePluginsBlocks UP-TO-DATE
+> Task :build-logic:generatePrecompiledScriptPluginAccessors UP-TO-DATE
+> Task :build-logic:generateScriptPluginAdapters UP-TO-DATE
+> Task :build-logic:compileKotlin UP-TO-DATE
+> Task :build-logic:compileJava NO-SOURCE
+> Task :build-logic:pluginDescriptors UP-TO-DATE
+> Task :build-logic:processResources UP-TO-DATE
+> Task :build-logic:classes UP-TO-DATE
+> Task :build-logic:jar UP-TO-DATE
+Warning: SDK processing. This version only understands SDK XML versions up to 3 but an SDK XML file of version 4 was encountered. This can happen if you use versions of Android Studio and the command-line tools that were released at different times.
+> Task :webview-android:checkKotlinGradlePluginConfigurationErrors SKIPPED
+> Task :webview-android:preBuild UP-TO-DATE
+> Task :webview-android:preDebugBuild UP-TO-DATE
+> Task :webview-android:generateDebugResValues UP-TO-DATE
+> Task :webview-android:generateDebugResources UP-TO-DATE
+> Task :webview-android:packageDebugResources UP-TO-DATE
+> Task :webview-android:parseDebugLocalResources UP-TO-DATE
+> Task :webview-android:generateDebugRFile UP-TO-DATE
+> Task :webview-api:kmpPartiallyResolvedDependenciesChecker
+> Task :webview-api:checkKotlinGradlePluginConfigurationErrors SKIPPED
+> Task :webview-api:preBuild UP-TO-DATE
+> Task :webview-api:preDebugBuild UP-TO-DATE
+> Task :webview-api:generateDebugResValues UP-TO-DATE
+> Task :webview-api:generateDebugResources UP-TO-DATE
+> Task :webview-api:packageDebugResources UP-TO-DATE
+> Task :webview-api:parseDebugLocalResources UP-TO-DATE
+> Task :webview-api:generateDebugRFile UP-TO-DATE
+> Task :webview-api:compileDebugKotlinAndroid UP-TO-DATE
+> Task :webview-api:javaPreCompileDebug UP-TO-DATE
+> Task :webview-api:compileDebugJavaWithJavac NO-SOURCE
+> Task :webview-api:bundleLibCompileToJarDebug UP-TO-DATE
+> Task :webview-extension-api:kmpPartiallyResolvedDependenciesChecker
+> Task :webview-extension-api:checkKotlinGradlePluginConfigurationErrors SKIPPED
+> Task :webview-extension-api:preBuild UP-TO-DATE
+> Task :webview-extension-api:preDebugBuild UP-TO-DATE
+> Task :webview-extension-api:generateDebugResValues UP-TO-DATE
+> Task :webview-extension-api:generateDebugResources UP-TO-DATE
+> Task :webview-extension-api:packageDebugResources UP-TO-DATE
+> Task :webview-extension-api:parseDebugLocalResources UP-TO-DATE
+> Task :webview-extension-api:generateDebugRFile UP-TO-DATE
+> Task :webview-extension-api:compileDebugKotlinAndroid UP-TO-DATE
+> Task :webview-extension-api:javaPreCompileDebug UP-TO-DATE
+> Task :webview-extension-api:compileDebugJavaWithJavac NO-SOURCE
+> Task :webview-extension-api:bundleLibCompileToJarDebug UP-TO-DATE
+> Task :webview-android:compileDebugKotlin UP-TO-DATE
+> Task :webview-android:javaPreCompileDebug UP-TO-DATE
+> Task :webview-android:compileDebugJavaWithJavac NO-SOURCE
+> Task :webview-android:bundleLibCompileToJarDebug UP-TO-DATE
+> Task :webview-android:preDebugAndroidTestBuild UP-TO-DATE
+> Task :webview-android:writeDebugAarMetadata UP-TO-DATE
+> Task :webview-api:writeDebugAarMetadata UP-TO-DATE
+> Task :webview-extension-api:writeDebugAarMetadata UP-TO-DATE
+> Task :webview-android:checkDebugAndroidTestAarMetadata UP-TO-DATE
+> Task :webview-android:compileDebugLibraryResources UP-TO-DATE
+> Task :webview-android:generateDebugAndroidTestResValues UP-TO-DATE
+> Task :webview-android:mapDebugAndroidTestSourceSetPaths UP-TO-DATE
+> Task :webview-android:generateDebugAndroidTestResources UP-TO-DATE
+> Task :webview-android:mergeDebugAndroidTestResources UP-TO-DATE
+> Task :webview-android:extractDeepLinksDebug UP-TO-DATE
+> Task :webview-android:processDebugManifest UP-TO-DATE
+> Task :webview-api:extractDeepLinksDebug UP-TO-DATE
+> Task :webview-api:processDebugManifest UP-TO-DATE
+> Task :webview-extension-api:extractDeepLinksDebug UP-TO-DATE
+> Task :webview-extension-api:processDebugManifest UP-TO-DATE
+> Task :webview-android:processDebugAndroidTestManifest UP-TO-DATE
+> Task :webview-api:compileDebugLibraryResources UP-TO-DATE
+> Task :webview-extension-api:compileDebugLibraryResources UP-TO-DATE
+> Task :webview-android:processDebugAndroidTestResources UP-TO-DATE
+> Task :webview-android:compileDebugAndroidTestKotlin UP-TO-DATE
+> Task :webview-android:javaPreCompileDebugAndroidTest UP-TO-DATE
+> Task :webview-android:compileDebugAndroidTestJavaWithJavac NO-SOURCE
+> Task :webview-android:mergeDebugAndroidTestShaders UP-TO-DATE
+> Task :webview-android:compileDebugAndroidTestShaders NO-SOURCE
+> Task :webview-android:generateDebugAndroidTestAssets UP-TO-DATE
+> Task :webview-android:mergeDebugShaders UP-TO-DATE
+> Task :webview-android:compileDebugShaders NO-SOURCE
+> Task :webview-android:generateDebugAssets UP-TO-DATE
+> Task :webview-android:packageDebugAssets UP-TO-DATE
+> Task :webview-api:mergeDebugShaders UP-TO-DATE
+> Task :webview-api:compileDebugShaders NO-SOURCE
+> Task :webview-api:debugAssetsCopyForAGP NO-SOURCE
+> Task :webview-api:generateDebugAssets UP-TO-DATE
+> Task :webview-api:packageDebugAssets UP-TO-DATE
+> Task :webview-extension-api:mergeDebugShaders UP-TO-DATE
+> Task :webview-extension-api:compileDebugShaders NO-SOURCE
+> Task :webview-extension-api:debugAssetsCopyForAGP NO-SOURCE
+> Task :webview-extension-api:generateDebugAssets UP-TO-DATE
+> Task :webview-extension-api:packageDebugAssets UP-TO-DATE
+> Task :webview-android:mergeDebugAndroidTestAssets UP-TO-DATE
+> Task :webview-android:compressDebugAndroidTestAssets UP-TO-DATE
+> Task :webview-android:bundleLibRuntimeToJarDebug UP-TO-DATE
+> Task :webview-extension-api:bundleLibRuntimeToJarDebug UP-TO-DATE
+> Task :webview-api:bundleLibRuntimeToJarDebug UP-TO-DATE
+> Task :webview-android:desugarDebugAndroidTestFileDependencies UP-TO-DATE
+> Task :webview-android:dexBuilderDebugAndroidTest UP-TO-DATE
+> Task :webview-android:mergeDebugAndroidTestGlobalSynthetics UP-TO-DATE
+> Task :webview-android:processDebugAndroidTestJavaRes UP-TO-DATE
+> Task :webview-android:processDebugJavaRes UP-TO-DATE
+> Task :webview-api:processDebugJavaRes UP-TO-DATE
+> Task :webview-extension-api:processDebugJavaRes UP-TO-DATE
+> Task :webview-android:mergeDebugAndroidTestJavaResource UP-TO-DATE
+> Task :webview-android:checkDebugAndroidTestDuplicateClasses UP-TO-DATE
+> Task :webview-android:mergeExtDexDebugAndroidTest UP-TO-DATE
+> Task :webview-android:bundleLibRuntimeToDirDebug UP-TO-DATE
+> Task :webview-extension-api:bundleLibRuntimeToDirDebug UP-TO-DATE
+> Task :webview-api:bundleLibRuntimeToDirDebug UP-TO-DATE
+> Task :webview-android:mergeProjectDexDebugAndroidTest UP-TO-DATE
+> Task :webview-android:mergeDebugJniLibFolders UP-TO-DATE
+> Task :webview-android:mergeDebugNativeLibs NO-SOURCE
+> Task :webview-android:mergeLibDexDebugAndroidTest UP-TO-DATE
+> Task :webview-android:copyDebugJniLibsProjectOnly UP-TO-DATE
+> Task :webview-android:mergeDebugAndroidTestJniLibFolders UP-TO-DATE
+> Task :webview-api:mergeDebugJniLibFolders UP-TO-DATE
+> Task :webview-api:mergeDebugNativeLibs NO-SOURCE
+> Task :webview-api:copyDebugJniLibsProjectOnly UP-TO-DATE
+> Task :webview-extension-api:mergeDebugJniLibFolders UP-TO-DATE
+> Task :webview-extension-api:mergeDebugNativeLibs NO-SOURCE
+> Task :webview-extension-api:copyDebugJniLibsProjectOnly UP-TO-DATE
+> Task :webview-android:mergeDebugAndroidTestNativeLibs NO-SOURCE
+> Task :webview-android:stripDebugAndroidTestDebugSymbols NO-SOURCE
+> Task :webview-android:validateSigningDebugAndroidTest UP-TO-DATE
+> Task :webview-android:writeDebugAndroidTestSigningConfigVersions UP-TO-DATE
+> Task :webview-android:packageDebugAndroidTest UP-TO-DATE
+> Task :webview-android:createDebugAndroidTestApkListingFileRedirect UP-TO-DATE
+
+> Task :webview-android:connectedDebugAndroidTest
+Starting 18 tests on medium_phone(AVD) - 16
+
+medium_phone(AVD) - 16 Tests 8/18 completed. (0 skipped) (0 failed)
+medium_phone(AVD) - 16 Tests 12/18 completed. (0 skipped) (0 failed)
+Finished 18 tests on medium_phone(AVD) - 16
+
+BUILD SUCCESSFUL in 41s
+96 actionable tasks: 4 executed, 92 up-to-date

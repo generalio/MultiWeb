@@ -1,0 +1,190 @@
+Starting a Gradle Daemon (subsequent builds will be faster)
+Daemon JVM discovery is an incubating feature.
+
+> Configure project :sample-compose
+w: ⚠️ Deprecated Gradle Version
+The used Gradle version (Gradle 8.10.2) is deprecated and will not be supported in future Kotlin Gradle Plugin releases.
+The minimum supported Gradle version will become Gradle 8.14.4 in Kotlin 2.5.0.
+
+This warning can be suppressed in 'gradle.properties':
+    kotlin.suppressGradlePluginWarnings=DeprecatedGradleVersionWarning
+Solution: Please update the Gradle version to at least Gradle 8.14.4.
+
+w: ⚠️ Native task 'iosX64Test' is disabled
+Task 'iosX64Test' for target 'ios_x64' cannot run on the current host (macos-aarch64).
+Reason: architecture mismatch - target requires X64, current host is ARM64
+Solution: To suppress this warning, add 'kotlin.native.ignoreDisabledTargets=true' to gradle.properties.
+
+w: ⚠️ Deprecated Gradle Property 'kotlin.mpp.androidSourceSetLayoutVersion' Used
+The `kotlin.mpp.androidSourceSetLayoutVersion` deprecated property is used in your build.
+Solutions:
+ * It is unsupported, please stop using it.
+ * Android Source Set Layout V2 is enabled by default and can't be changed. Leave your questions here https://youtrack.jetbrains.com/issue/KT-82265
+
+
+> Task :build-logic:checkKotlinGradlePluginConfigurationErrors
+> Task :build-logic:generateExternalPluginSpecBuilders
+> Task :build-logic:extractPrecompiledScriptPluginPlugins
+> Task :build-logic:compilePluginsBlocks
+> Task :build-logic:generatePrecompiledScriptPluginAccessors
+> Task :build-logic:generateScriptPluginAdapters
+> Task :build-logic:pluginDescriptors
+> Task :build-logic:processResources
+
+> Task :build-logic:compileKotlin
+w: file:///Users/generals/AndroidProject/MultiWeb-webview-js-impl/build-logic/src/main/kotlin/multiweb.browser-library.gradle.kts:12:3 'js(KotlinJsCompilerType, KotlinJsTargetDsl.() -> Unit = ...): KotlinJsTargetDsl' is deprecated. Kotlin/JS IR is the only supported compiler type. Use js(configure) instead. Scheduled for removal in Kotlin 2.6.
+w: file:///Users/generals/AndroidProject/MultiWeb-webview-js-impl/build-logic/src/main/kotlin/multiweb.browser-library.gradle.kts:12:6 'IR: KotlinJsCompilerType' is deprecated. Kotlin/JS IR is the only supported compiler type. Remove compiler type selection from the DSL. Scheduled for removal in Kotlin 2.6.
+w: file:///Users/generals/AndroidProject/MultiWeb-webview-js-impl/build-logic/src/main/kotlin/multiweb.kmp-library.gradle.kts:36:3 'js(KotlinJsCompilerType, KotlinJsTargetDsl.() -> Unit = ...): KotlinJsTargetDsl' is deprecated. Kotlin/JS IR is the only supported compiler type. Use js(configure) instead. Scheduled for removal in Kotlin 2.6.
+w: file:///Users/generals/AndroidProject/MultiWeb-webview-js-impl/build-logic/src/main/kotlin/multiweb.kmp-library.gradle.kts:36:6 'IR: KotlinJsCompilerType' is deprecated. Kotlin/JS IR is the only supported compiler type. Remove compiler type selection from the DSL. Scheduled for removal in Kotlin 2.6.
+w: file:///Users/generals/AndroidProject/MultiWeb-webview-js-impl/build-logic/src/main/kotlin/multiweb.kmp-test-fixtures.gradle.kts:32:3 'js(KotlinJsCompilerType, KotlinJsTargetDsl.() -> Unit = ...): KotlinJsTargetDsl' is deprecated. Kotlin/JS IR is the only supported compiler type. Use js(configure) instead. Scheduled for removal in Kotlin 2.6.
+w: file:///Users/generals/AndroidProject/MultiWeb-webview-js-impl/build-logic/src/main/kotlin/multiweb.kmp-test-fixtures.gradle.kts:32:6 'IR: KotlinJsCompilerType' is deprecated. Kotlin/JS IR is the only supported compiler type. Remove compiler type selection from the DSL. Scheduled for removal in Kotlin 2.6.
+
+> Task :build-logic:compileJava NO-SOURCE
+> Task :build-logic:classes
+> Task :build-logic:jar
+Warning: SDK processing. This version only understands SDK XML versions up to 3 but an SDK XML file of version 4 was encountered. This can happen if you use versions of Android Studio and the command-line tools that were released at different times.
+> Task :webview-android:checkKotlinGradlePluginConfigurationErrors SKIPPED
+> Task :webview-android:preBuild UP-TO-DATE
+> Task :webview-android:preDebugBuild UP-TO-DATE
+> Task :webview-android:generateDebugResValues
+> Task :webview-android:generateDebugResources
+> Task :webview-api:kmpPartiallyResolvedDependenciesChecker
+> Task :webview-api:checkKotlinGradlePluginConfigurationErrors SKIPPED
+> Task :webview-api:preBuild UP-TO-DATE
+> Task :webview-api:preDebugBuild UP-TO-DATE
+> Task :webview-api:generateDebugResValues
+> Task :webview-api:generateDebugResources
+> Task :webview-api:packageDebugResources
+> Task :webview-android:packageDebugResources
+> Task :webview-android:preDebugAndroidTestBuild UP-TO-DATE
+> Task :webview-android:javaPreCompileDebug
+> Task :webview-api:javaPreCompileDebug
+> Task :webview-api:extractDeepLinksDebug
+> Task :webview-api:writeDebugAarMetadata
+> Task :webview-android:writeDebugAarMetadata
+> Task :webview-api:parseDebugLocalResources
+> Task :webview-android:parseDebugLocalResources
+> Task :webview-api:processDebugManifest
+> Task :webview-android:compileDebugLibraryResources
+> Task :webview-api:compileDebugLibraryResources
+> Task :webview-android:generateDebugAndroidTestResValues
+> Task :webview-android:generateDebugAndroidTestResources
+> Task :webview-android:extractDeepLinksDebug
+> Task :webview-api:mergeDebugShaders
+> Task :webview-api:compileDebugShaders NO-SOURCE
+> Task :webview-api:debugAssetsCopyForAGP NO-SOURCE
+> Task :webview-api:generateDebugAssets UP-TO-DATE
+> Task :webview-android:javaPreCompileDebugAndroidTest
+> Task :webview-api:packageDebugAssets
+> Task :webview-android:processDebugManifest
+> Task :webview-android:mergeDebugAndroidTestShaders
+> Task :webview-android:compileDebugAndroidTestShaders NO-SOURCE
+> Task :webview-android:generateDebugAndroidTestAssets UP-TO-DATE
+> Task :webview-api:mergeDebugJniLibFolders
+> Task :webview-api:mergeDebugNativeLibs NO-SOURCE
+> Task :webview-android:mergeDebugShaders
+> Task :webview-android:compileDebugShaders NO-SOURCE
+> Task :webview-android:generateDebugAssets UP-TO-DATE
+> Task :webview-android:generateDebugRFile
+> Task :webview-api:generateDebugRFile
+> Task :webview-api:copyDebugJniLibsProjectOnly
+> Task :webview-android:packageDebugAssets
+> Task :webview-android:desugarDebugAndroidTestFileDependencies
+> Task :webview-android:mergeDebugJniLibFolders
+> Task :webview-android:checkDebugAndroidTestDuplicateClasses
+> Task :webview-android:mergeDebugNativeLibs NO-SOURCE
+> Task :webview-extension-api:kmpPartiallyResolvedDependenciesChecker
+> Task :webview-extension-api:checkKotlinGradlePluginConfigurationErrors SKIPPED
+> Task :webview-extension-api:preBuild UP-TO-DATE
+> Task :webview-extension-api:preDebugBuild UP-TO-DATE
+> Task :webview-extension-api:generateDebugResValues
+> Task :webview-extension-api:generateDebugResources
+> Task :webview-extension-api:packageDebugResources
+> Task :webview-extension-api:writeDebugAarMetadata
+> Task :webview-extension-api:extractDeepLinksDebug
+> Task :webview-extension-api:compileDebugLibraryResources
+> Task :webview-extension-api:mergeDebugShaders
+> Task :webview-extension-api:processDebugManifest
+> Task :webview-extension-api:javaPreCompileDebug
+> Task :webview-extension-api:compileDebugShaders NO-SOURCE
+> Task :webview-extension-api:debugAssetsCopyForAGP NO-SOURCE
+> Task :webview-extension-api:generateDebugAssets UP-TO-DATE
+> Task :webview-extension-api:packageDebugAssets
+> Task :webview-extension-api:parseDebugLocalResources
+> Task :webview-extension-api:mergeDebugJniLibFolders
+> Task :webview-extension-api:mergeDebugNativeLibs NO-SOURCE
+> Task :webview-extension-api:copyDebugJniLibsProjectOnly
+> Task :webview-extension-api:generateDebugRFile
+> Task :webview-api:compileDebugKotlinAndroid
+> Task :webview-api:compileDebugJavaWithJavac NO-SOURCE
+> Task :webview-api:processDebugJavaRes
+> Task :webview-api:bundleLibRuntimeToJarDebug
+> Task :webview-api:bundleLibCompileToJarDebug
+> Task :webview-api:bundleLibRuntimeToDirDebug
+> Task :webview-extension-api:compileDebugKotlinAndroid
+> Task :webview-extension-api:compileDebugJavaWithJavac NO-SOURCE
+> Task :webview-extension-api:bundleLibCompileToJarDebug
+> Task :webview-extension-api:bundleLibRuntimeToJarDebug
+> Task :webview-extension-api:processDebugJavaRes
+> Task :webview-extension-api:bundleLibRuntimeToDirDebug
+> Task :webview-android:checkDebugAndroidTestAarMetadata
+> Task :webview-android:mapDebugAndroidTestSourceSetPaths
+> Task :webview-android:processDebugAndroidTestManifest
+> Task :webview-android:mergeDebugAndroidTestAssets
+> Task :webview-android:compressDebugAndroidTestAssets
+> Task :webview-android:copyDebugJniLibsProjectOnly
+> Task :webview-android:mergeDebugAndroidTestJniLibFolders
+> Task :webview-android:mergeDebugAndroidTestNativeLibs NO-SOURCE
+> Task :webview-android:stripDebugAndroidTestDebugSymbols NO-SOURCE
+> Task :webview-android:mergeDebugAndroidTestResources
+> Task :webview-android:validateSigningDebugAndroidTest
+> Task :webview-android:mergeExtDexDebugAndroidTest
+> Task :webview-android:writeDebugAndroidTestSigningConfigVersions
+> Task :webview-android:processDebugAndroidTestResources
+> Task :webview-android:compileDebugKotlin
+> Task :webview-android:compileDebugJavaWithJavac NO-SOURCE
+> Task :webview-android:bundleLibCompileToJarDebug
+> Task :webview-android:bundleLibRuntimeToJarDebug
+> Task :webview-android:processDebugJavaRes
+> Task :webview-android:bundleLibRuntimeToDirDebug
+> Task :webview-android:mergeLibDexDebugAndroidTest
+> Task :webview-android:compileDebugAndroidTestKotlin
+> Task :webview-android:compileDebugAndroidTestJavaWithJavac NO-SOURCE
+> Task :webview-android:dexBuilderDebugAndroidTest
+> Task :webview-android:mergeDebugAndroidTestGlobalSynthetics
+> Task :webview-android:processDebugAndroidTestJavaRes
+> Task :webview-android:mergeProjectDexDebugAndroidTest
+> Task :webview-android:mergeDebugAndroidTestJavaResource
+> Task :webview-android:packageDebugAndroidTest
+> Task :webview-android:createDebugAndroidTestApkListingFileRedirect
+
+> Task :webview-android:connectedDebugAndroidTest
+Starting 3 tests on medium_phone(AVD) - 16
+
+io.github.multiweb.android.AndroidScriptBridgeCompatibilityTest > 消息通道不支持时安装桥不抛异常[medium_phone(AVD) - 16] [31mFAILED [0m
+	java.lang.IllegalArgumentException: 当前 Android System WebView 不支持受限来源 JS 桥。
+	at io.github.multiweb.android.AndroidScriptBridgeInstaller.install(AndroidScriptBridgeInstaller.kt:37)
+
+io.github.multiweb.android.AndroidScriptBridgeCompatibilityTest > 文档开始脚本不支持时安装桥不抛异常[medium_phone(AVD) - 16] [31mFAILED [0m
+	java.lang.IllegalArgumentException: 当前 Android System WebView 不支持文档开始阶段的 JS 桥门面。
+	at io.github.multiweb.android.AndroidScriptBridgeInstaller.install(AndroidScriptBridgeInstaller.kt:49)
+Tests on medium_phone(AVD) - 16 failed: There was 2 failure(s).
+
+Finished 3 tests on medium_phone(AVD) - 16
+
+> Task :webview-android:connectedDebugAndroidTest FAILED
+
+FAILURE: Build failed with an exception.
+
+* What went wrong:
+Execution failed for task ':webview-android:connectedDebugAndroidTest'.
+> There were failing tests. See the report at: file:///Users/generals/AndroidProject/MultiWeb-webview-js-impl/webview-android/build/reports/androidTests/connected/debug/index.html
+
+* Try:
+> Run with --stacktrace option to get the stack trace.
+> Run with --info or --debug option to get more log output.
+> Run with --scan to get full insights.
+> Get more help at https://help.gradle.org.
+
+BUILD FAILED in 54s
+96 actionable tasks: 96 executed

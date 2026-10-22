@@ -1,0 +1,399 @@
+
+> Configure project :sample-compose
+w: ⚠️ Deprecated Gradle Version
+The used Gradle version (Gradle 8.10.2) is deprecated and will not be supported in future Kotlin Gradle Plugin releases.
+The minimum supported Gradle version will become Gradle 8.14.4 in Kotlin 2.5.0.
+
+This warning can be suppressed in 'gradle.properties':
+    kotlin.suppressGradlePluginWarnings=DeprecatedGradleVersionWarning
+Solution: Please update the Gradle version to at least Gradle 8.14.4.
+
+w: ⚠️ Native task 'iosX64Test' is disabled
+Task 'iosX64Test' for target 'ios_x64' cannot run on the current host (macos-aarch64).
+Reason: architecture mismatch - target requires X64, current host is ARM64
+Solution: To suppress this warning, add 'kotlin.native.ignoreDisabledTargets=true' to gradle.properties.
+
+w: ⚠️ Deprecated Gradle Property 'kotlin.mpp.androidSourceSetLayoutVersion' Used
+The `kotlin.mpp.androidSourceSetLayoutVersion` deprecated property is used in your build.
+Solutions:
+ * It is unsupported, please stop using it.
+ * Android Source Set Layout V2 is enabled by default and can't be changed. Leave your questions here https://youtrack.jetbrains.com/issue/KT-82265
+
+
+> Task :build-logic:checkKotlinGradlePluginConfigurationErrors
+> Task :build-logic:generateExternalPluginSpecBuilders UP-TO-DATE
+> Task :build-logic:extractPrecompiledScriptPluginPlugins UP-TO-DATE
+> Task :build-logic:compilePluginsBlocks UP-TO-DATE
+> Task :build-logic:generatePrecompiledScriptPluginAccessors UP-TO-DATE
+> Task :build-logic:generateScriptPluginAdapters UP-TO-DATE
+> Task :build-logic:compileKotlin UP-TO-DATE
+> Task :build-logic:compileJava NO-SOURCE
+> Task :build-logic:pluginDescriptors UP-TO-DATE
+> Task :build-logic:processResources UP-TO-DATE
+> Task :build-logic:classes UP-TO-DATE
+> Task :build-logic:jar UP-TO-DATE
+> Task :webview-api:kmpPartiallyResolvedDependenciesChecker
+> Task :webview-api:checkKotlinGradlePluginConfigurationErrors SKIPPED
+> Task :webview-api:preBuild UP-TO-DATE
+> Task :webview-api:preReleaseBuild UP-TO-DATE
+> Task :webview-api:generateReleaseResValues UP-TO-DATE
+> Task :webview-api:generateReleaseResources UP-TO-DATE
+> Task :webview-api:packageReleaseResources UP-TO-DATE
+> Task :webview-api:parseReleaseLocalResources UP-TO-DATE
+> Task :webview-api:generateReleaseRFile UP-TO-DATE
+> Task :webview-api:compileReleaseKotlinAndroid UP-TO-DATE
+> Task :webview-api:javaPreCompileRelease UP-TO-DATE
+> Task :webview-api:compileReleaseJavaWithJavac NO-SOURCE
+> Task :webview-api:androidApiBuild UP-TO-DATE
+> Task :webview-api:androidApiCheck
+> Task :webview-api:compileKotlinJvm UP-TO-DATE
+> Task :webview-api:compileJvmMainJava NO-SOURCE
+> Task :webview-api:jvmProcessResources NO-SOURCE
+> Task :webview-api:processJvmMainResources SKIPPED
+> Task :webview-api:jvmMainClasses UP-TO-DATE
+> Task :webview-api:jvmApiBuild UP-TO-DATE
+> Task :webview-api:jvmApiCheck
+> Task :webview-api:klibApiExtractForValidation SKIPPED
+> Task :webview-api:downloadKotlinNativeDistribution UP-TO-DATE
+> Task :webview-api:compileKotlinIosArm64 UP-TO-DATE
+> Task :webview-api:iosArm64ProcessResources NO-SOURCE
+> Task :webview-api:iosArm64MainKlibrary UP-TO-DATE
+> Task :webview-api:iosArm64ApiBuild SKIPPED
+> Task :webview-api:compileKotlinIosSimulatorArm64 UP-TO-DATE
+> Task :webview-api:iosSimulatorArm64ProcessResources NO-SOURCE
+> Task :webview-api:iosSimulatorArm64MainKlibrary UP-TO-DATE
+> Task :webview-api:iosSimulatorArm64ApiBuild SKIPPED
+> Task :webview-api:compileKotlinIosX64 UP-TO-DATE
+> Task :webview-api:iosX64ProcessResources NO-SOURCE
+> Task :webview-api:iosX64MainKlibrary UP-TO-DATE
+> Task :webview-api:iosX64ApiBuild SKIPPED
+> Task :webview-api:compileKotlinJs UP-TO-DATE
+> Task :webview-api:jsProcessResources NO-SOURCE
+> Task :webview-api:jsMainClasses UP-TO-DATE
+> Task :webview-api:jsApiBuild SKIPPED
+> Task :webview-api:compileKotlinWasmJs UP-TO-DATE
+> Task :webview-api:wasmJsProcessResources NO-SOURCE
+> Task :webview-api:wasmJsMainClasses UP-TO-DATE
+> Task :webview-api:wasmJsApiBuild SKIPPED
+> Task :webview-api:klibApiMerge SKIPPED
+> Task :webview-api:klibApiCheck SKIPPED
+> Task :webview-api:apiCheck
+> Task :webview-browser:klibApiExtractForValidation SKIPPED
+> Task :webview-browser:kmpPartiallyResolvedDependenciesChecker
+> Task :webview-browser:checkKotlinGradlePluginConfigurationErrors SKIPPED
+> Task :webview-browser:compileKotlinJs UP-TO-DATE
+> Task :webview-browser:jsProcessResources NO-SOURCE
+> Task :webview-browser:jsMainClasses UP-TO-DATE
+> Task :webview-browser:jsApiBuild SKIPPED
+> Task :webview-browser:compileKotlinWasmJs UP-TO-DATE
+> Task :webview-browser:wasmJsProcessResources NO-SOURCE
+> Task :webview-browser:wasmJsMainClasses UP-TO-DATE
+> Task :webview-browser:wasmJsApiBuild SKIPPED
+> Task :webview-browser:klibApiMerge SKIPPED
+> Task :webview-browser:klibApiCheck SKIPPED
+> Task :webview-browser:apiCheck UP-TO-DATE
+> Task :webview-android:checkKotlinGradlePluginConfigurationErrors SKIPPED
+> Task :webview-android:preBuild UP-TO-DATE
+> Task :webview-android:preReleaseBuild UP-TO-DATE
+> Task :webview-android:generateReleaseResValues UP-TO-DATE
+> Task :webview-android:generateReleaseResources UP-TO-DATE
+> Task :webview-android:packageReleaseResources UP-TO-DATE
+> Task :webview-android:parseReleaseLocalResources UP-TO-DATE
+> Task :webview-android:generateReleaseRFile UP-TO-DATE
+> Task :webview-api:bundleLibCompileToJarRelease UP-TO-DATE
+> Task :webview-extension-api:kmpPartiallyResolvedDependenciesChecker
+> Task :webview-extension-api:checkKotlinGradlePluginConfigurationErrors SKIPPED
+> Task :webview-extension-api:preBuild UP-TO-DATE
+> Task :webview-extension-api:preReleaseBuild UP-TO-DATE
+> Task :webview-extension-api:generateReleaseResValues UP-TO-DATE
+> Task :webview-extension-api:generateReleaseResources UP-TO-DATE
+> Task :webview-extension-api:packageReleaseResources UP-TO-DATE
+> Task :webview-extension-api:parseReleaseLocalResources UP-TO-DATE
+> Task :webview-extension-api:generateReleaseRFile UP-TO-DATE
+> Task :webview-extension-api:compileReleaseKotlinAndroid UP-TO-DATE
+> Task :webview-extension-api:javaPreCompileRelease UP-TO-DATE
+> Task :webview-extension-api:compileReleaseJavaWithJavac NO-SOURCE
+> Task :webview-extension-api:bundleLibCompileToJarRelease UP-TO-DATE
+> Task :webview-android:compileReleaseKotlin UP-TO-DATE
+> Task :webview-android:javaPreCompileRelease UP-TO-DATE
+> Task :webview-android:compileReleaseJavaWithJavac NO-SOURCE
+> Task :webview-android:bundleLibCompileToJarRelease UP-TO-DATE
+> Task :webview-compose:kmpPartiallyResolvedDependenciesChecker
+> Task :webview-compose:checkKotlinGradlePluginConfigurationErrors SKIPPED
+> Task :webview-compose:convertXmlValueResourcesForAndroidMain NO-SOURCE
+> Task :webview-compose:copyNonXmlValueResourcesForAndroidMain NO-SOURCE
+> Task :webview-compose:prepareComposeResourcesTaskForAndroidMain NO-SOURCE
+> Task :webview-compose:generateResourceAccessorsForAndroidMain SKIPPED
+> Task :webview-compose:convertXmlValueResourcesForCommonMain NO-SOURCE
+> Task :webview-compose:copyNonXmlValueResourcesForCommonMain NO-SOURCE
+> Task :webview-compose:prepareComposeResourcesTaskForCommonMain NO-SOURCE
+> Task :webview-compose:generateResourceAccessorsForCommonMain SKIPPED
+> Task :webview-compose:generateActualResourceCollectorsForAndroidMain SKIPPED
+> Task :webview-compose:generateComposeResClass SKIPPED
+> Task :webview-compose:generateExpectResourceCollectorsForCommonMain SKIPPED
+> Task :webview-compose:preBuild UP-TO-DATE
+> Task :webview-compose:preReleaseBuild UP-TO-DATE
+> Task :webview-compose:generateReleaseResValues UP-TO-DATE
+> Task :webview-compose:generateReleaseResources UP-TO-DATE
+> Task :webview-compose:packageReleaseResources UP-TO-DATE
+> Task :webview-compose:parseReleaseLocalResources UP-TO-DATE
+> Task :webview-compose:generateReleaseRFile UP-TO-DATE
+> Task :webview-compose:convertXmlValueResourcesForAndroidRelease NO-SOURCE
+> Task :webview-compose:copyNonXmlValueResourcesForAndroidRelease NO-SOURCE
+> Task :webview-compose:prepareComposeResourcesTaskForAndroidRelease NO-SOURCE
+> Task :webview-compose:generateResourceAccessorsForAndroidRelease SKIPPED
+> Task :webview-compose:compileReleaseKotlinAndroid UP-TO-DATE
+> Task :webview-compose:javaPreCompileRelease UP-TO-DATE
+> Task :webview-compose:compileReleaseJavaWithJavac NO-SOURCE
+> Task :webview-compose:androidApiBuild UP-TO-DATE
+> Task :webview-compose:androidApiCheck
+> Task :webview-api:jvmJar UP-TO-DATE
+> Task :webview-compose:convertXmlValueResourcesForJvmMain NO-SOURCE
+> Task :webview-compose:copyNonXmlValueResourcesForJvmMain NO-SOURCE
+> Task :webview-compose:prepareComposeResourcesTaskForJvmMain NO-SOURCE
+> Task :webview-compose:generateResourceAccessorsForJvmMain SKIPPED
+> Task :webview-compose:generateActualResourceCollectorsForJvmMain SKIPPED
+> Task :webview-desktop:checkKotlinGradlePluginConfigurationErrors SKIPPED
+> Task :webview-extension-api:compileKotlinJvm UP-TO-DATE
+> Task :webview-extension-api:compileJvmMainJava NO-SOURCE
+> Task :webview-extension-api:jvmProcessResources NO-SOURCE
+> Task :webview-extension-api:processJvmMainResources SKIPPED
+> Task :webview-extension-api:jvmMainClasses UP-TO-DATE
+> Task :webview-extension-api:jvmJar UP-TO-DATE
+> Task :webview-desktop:compileKotlin UP-TO-DATE
+> Task :webview-desktop:compileJava NO-SOURCE
+> Task :webview-desktop:processResources NO-SOURCE
+> Task :webview-desktop:classes UP-TO-DATE
+> Task :webview-desktop:jar UP-TO-DATE
+> Task :webview-compose:compileKotlinJvm UP-TO-DATE
+> Task :webview-compose:compileJvmMainJava NO-SOURCE
+> Task :webview-compose:assembleJvmMainResources UP-TO-DATE
+> Task :webview-compose:jvmProcessResources UP-TO-DATE
+> Task :webview-compose:processJvmMainResources SKIPPED
+> Task :webview-compose:jvmMainClasses UP-TO-DATE
+> Task :webview-compose:jvmApiBuild UP-TO-DATE
+> Task :webview-compose:jvmApiCheck
+> Task :webview-compose:klibApiExtractForValidation SKIPPED
+> Task :webview-api:exportCrossCompilationMetadataForIosArm64ApiElements UP-TO-DATE
+> Task :webview-compose:downloadKotlinNativeDistribution UP-TO-DATE
+> Task :webview-compose:convertXmlValueResourcesForAppleMain NO-SOURCE
+> Task :webview-compose:copyNonXmlValueResourcesForAppleMain NO-SOURCE
+> Task :webview-compose:prepareComposeResourcesTaskForAppleMain NO-SOURCE
+> Task :webview-compose:generateResourceAccessorsForAppleMain SKIPPED
+> Task :webview-compose:convertXmlValueResourcesForIosArm64Main NO-SOURCE
+> Task :webview-compose:copyNonXmlValueResourcesForIosArm64Main NO-SOURCE
+> Task :webview-compose:prepareComposeResourcesTaskForIosArm64Main NO-SOURCE
+> Task :webview-compose:generateResourceAccessorsForIosArm64Main SKIPPED
+> Task :webview-compose:convertXmlValueResourcesForIosMain NO-SOURCE
+> Task :webview-compose:copyNonXmlValueResourcesForIosMain NO-SOURCE
+> Task :webview-compose:prepareComposeResourcesTaskForIosMain NO-SOURCE
+> Task :webview-compose:generateResourceAccessorsForIosMain SKIPPED
+> Task :webview-compose:convertXmlValueResourcesForNativeMain NO-SOURCE
+> Task :webview-compose:copyNonXmlValueResourcesForNativeMain NO-SOURCE
+> Task :webview-compose:prepareComposeResourcesTaskForNativeMain NO-SOURCE
+> Task :webview-compose:generateResourceAccessorsForNativeMain SKIPPED
+> Task :webview-compose:generateActualResourceCollectorsForIosArm64Main SKIPPED
+> Task :webview-extension-api:downloadKotlinNativeDistribution UP-TO-DATE
+> Task :webview-extension-api:compileKotlinIosArm64 UP-TO-DATE
+> Task :webview-extension-api:exportCrossCompilationMetadataForIosArm64ApiElements UP-TO-DATE
+> Task :webview-ios:kmpPartiallyResolvedDependenciesChecker
+> Task :webview-ios:checkKotlinGradlePluginConfigurationErrors SKIPPED
+> Task :webview-ios:downloadKotlinNativeDistribution UP-TO-DATE
+> Task :webview-ios:compileKotlinIosArm64 UP-TO-DATE
+> Task :webview-ios:exportCrossCompilationMetadataForIosArm64ApiElements UP-TO-DATE
+> Task :webview-compose:compileKotlinIosArm64 UP-TO-DATE
+> Task :webview-compose:iosArm64ResolveResourcesFromDependencies UP-TO-DATE
+> Task :webview-compose:assembleIosArm64MainResources UP-TO-DATE
+> Task :webview-compose:iosArm64ResolveSelfResourcesCopyHierarchicalMultiplatformResources UP-TO-DATE
+> Task :webview-compose:iosArm64AggregateResources UP-TO-DATE
+> Task :webview-compose:iosArm64ProcessResources UP-TO-DATE
+> Task :webview-compose:iosArm64MainKlibrary UP-TO-DATE
+> Task :webview-compose:iosArm64ApiBuild SKIPPED
+> Task :webview-api:exportCrossCompilationMetadataForIosSimulatorArm64ApiElements UP-TO-DATE
+> Task :webview-compose:convertXmlValueResourcesForIosSimulatorArm64Main NO-SOURCE
+> Task :webview-compose:copyNonXmlValueResourcesForIosSimulatorArm64Main NO-SOURCE
+> Task :webview-compose:prepareComposeResourcesTaskForIosSimulatorArm64Main NO-SOURCE
+> Task :webview-compose:generateResourceAccessorsForIosSimulatorArm64Main SKIPPED
+> Task :webview-compose:generateActualResourceCollectorsForIosSimulatorArm64Main SKIPPED
+> Task :webview-extension-api:compileKotlinIosSimulatorArm64 UP-TO-DATE
+> Task :webview-extension-api:exportCrossCompilationMetadataForIosSimulatorArm64ApiElements UP-TO-DATE
+> Task :webview-ios:compileKotlinIosSimulatorArm64 UP-TO-DATE
+> Task :webview-ios:exportCrossCompilationMetadataForIosSimulatorArm64ApiElements UP-TO-DATE
+> Task :webview-compose:compileKotlinIosSimulatorArm64 UP-TO-DATE
+> Task :webview-compose:iosSimulatorArm64ResolveResourcesFromDependencies UP-TO-DATE
+> Task :webview-compose:assembleIosSimulatorArm64MainResources UP-TO-DATE
+> Task :webview-compose:iosSimulatorArm64ResolveSelfResourcesCopyHierarchicalMultiplatformResources UP-TO-DATE
+> Task :webview-compose:iosSimulatorArm64AggregateResources UP-TO-DATE
+> Task :webview-compose:iosSimulatorArm64ProcessResources UP-TO-DATE
+> Task :webview-compose:iosSimulatorArm64MainKlibrary UP-TO-DATE
+> Task :webview-compose:iosSimulatorArm64ApiBuild SKIPPED
+> Task :webview-api:exportCrossCompilationMetadataForIosX64ApiElements UP-TO-DATE
+> Task :webview-compose:convertXmlValueResourcesForIosX64Main NO-SOURCE
+> Task :webview-compose:copyNonXmlValueResourcesForIosX64Main NO-SOURCE
+> Task :webview-compose:prepareComposeResourcesTaskForIosX64Main NO-SOURCE
+> Task :webview-compose:generateResourceAccessorsForIosX64Main SKIPPED
+> Task :webview-compose:generateActualResourceCollectorsForIosX64Main SKIPPED
+> Task :webview-extension-api:compileKotlinIosX64 UP-TO-DATE
+> Task :webview-extension-api:exportCrossCompilationMetadataForIosX64ApiElements UP-TO-DATE
+> Task :webview-ios:compileKotlinIosX64 UP-TO-DATE
+> Task :webview-ios:exportCrossCompilationMetadataForIosX64ApiElements UP-TO-DATE
+> Task :webview-compose:compileKotlinIosX64 UP-TO-DATE
+> Task :webview-compose:iosX64ResolveResourcesFromDependencies UP-TO-DATE
+> Task :webview-compose:assembleIosX64MainResources UP-TO-DATE
+> Task :webview-compose:iosX64ResolveSelfResourcesCopyHierarchicalMultiplatformResources UP-TO-DATE
+> Task :webview-compose:iosX64AggregateResources UP-TO-DATE
+> Task :webview-compose:iosX64ProcessResources UP-TO-DATE
+> Task :webview-compose:iosX64MainKlibrary UP-TO-DATE
+> Task :webview-compose:iosX64ApiBuild SKIPPED
+> Task :webview-compose:convertXmlValueResourcesForJsMain NO-SOURCE
+> Task :webview-compose:copyNonXmlValueResourcesForJsMain NO-SOURCE
+> Task :webview-compose:prepareComposeResourcesTaskForJsMain NO-SOURCE
+> Task :webview-compose:generateResourceAccessorsForJsMain SKIPPED
+> Task :webview-compose:convertXmlValueResourcesForWebMain NO-SOURCE
+> Task :webview-compose:copyNonXmlValueResourcesForWebMain NO-SOURCE
+> Task :webview-compose:prepareComposeResourcesTaskForWebMain NO-SOURCE
+> Task :webview-compose:generateResourceAccessorsForWebMain SKIPPED
+> Task :webview-compose:generateActualResourceCollectorsForJsMain SKIPPED
+> Task :webview-extension-api:compileKotlinJs UP-TO-DATE
+> Task :webview-compose:compileKotlinJs UP-TO-DATE
+> Task :webview-compose:jsResolveResourcesFromDependencies UP-TO-DATE
+> Task :webview-compose:assembleJsMainResources UP-TO-DATE
+> Task :webview-compose:jsResolveSelfResourcesCopyHierarchicalMultiplatformResources UP-TO-DATE
+> Task :webview-compose:jsAggregateResources UP-TO-DATE
+> Task :webview-compose:unpackSkikoWasmRuntime UP-TO-DATE
+> Task :webview-compose:jsProcessResources UP-TO-DATE
+> Task :webview-compose:jsMainClasses UP-TO-DATE
+> Task :webview-compose:jsApiBuild SKIPPED
+> Task :webview-compose:convertXmlValueResourcesForWasmJsMain NO-SOURCE
+> Task :webview-compose:copyNonXmlValueResourcesForWasmJsMain NO-SOURCE
+> Task :webview-compose:prepareComposeResourcesTaskForWasmJsMain NO-SOURCE
+> Task :webview-compose:generateResourceAccessorsForWasmJsMain SKIPPED
+> Task :webview-compose:generateActualResourceCollectorsForWasmJsMain SKIPPED
+> Task :webview-extension-api:compileKotlinWasmJs UP-TO-DATE
+> Task :webview-compose:compileKotlinWasmJs UP-TO-DATE
+> Task :webview-compose:wasmJsResolveResourcesFromDependencies UP-TO-DATE
+> Task :webview-compose:assembleWasmJsMainResources UP-TO-DATE
+> Task :webview-compose:wasmJsResolveSelfResourcesCopyHierarchicalMultiplatformResources UP-TO-DATE
+> Task :webview-compose:wasmJsAggregateResources UP-TO-DATE
+> Task :webview-compose:wasmJsProcessResources UP-TO-DATE
+> Task :webview-compose:wasmJsMainClasses UP-TO-DATE
+> Task :webview-compose:wasmJsApiBuild SKIPPED
+> Task :webview-compose:klibApiMerge SKIPPED
+> Task :webview-compose:klibApiCheck SKIPPED
+> Task :webview-compose:apiCheck
+> Task :webview-extension-api:androidApiBuild UP-TO-DATE
+> Task :webview-extension-api:androidApiCheck
+> Task :webview-extension-api:jvmApiBuild UP-TO-DATE
+> Task :webview-extension-api:jvmApiCheck
+> Task :webview-extension-api:klibApiExtractForValidation SKIPPED
+> Task :webview-extension-api:iosArm64ProcessResources NO-SOURCE
+> Task :webview-extension-api:iosArm64MainKlibrary UP-TO-DATE
+> Task :webview-extension-api:iosArm64ApiBuild SKIPPED
+> Task :webview-extension-api:iosSimulatorArm64ProcessResources NO-SOURCE
+> Task :webview-extension-api:iosSimulatorArm64MainKlibrary UP-TO-DATE
+> Task :webview-extension-api:iosSimulatorArm64ApiBuild SKIPPED
+> Task :webview-extension-api:iosX64ProcessResources NO-SOURCE
+> Task :webview-extension-api:iosX64MainKlibrary UP-TO-DATE
+> Task :webview-extension-api:iosX64ApiBuild SKIPPED
+> Task :webview-extension-api:jsProcessResources NO-SOURCE
+> Task :webview-extension-api:jsMainClasses UP-TO-DATE
+> Task :webview-extension-api:jsApiBuild SKIPPED
+> Task :webview-extension-api:wasmJsProcessResources NO-SOURCE
+> Task :webview-extension-api:wasmJsMainClasses UP-TO-DATE
+> Task :webview-extension-api:wasmJsApiBuild SKIPPED
+> Task :webview-extension-api:klibApiMerge SKIPPED
+> Task :webview-extension-api:klibApiCheck SKIPPED
+> Task :webview-extension-api:apiCheck
+> Task :webview-ios:klibApiExtractForValidation SKIPPED
+> Task :webview-ios:iosArm64ProcessResources NO-SOURCE
+> Task :webview-ios:iosArm64MainKlibrary UP-TO-DATE
+> Task :webview-ios:iosArm64ApiBuild SKIPPED
+> Task :webview-ios:iosSimulatorArm64ProcessResources NO-SOURCE
+> Task :webview-ios:iosSimulatorArm64MainKlibrary UP-TO-DATE
+> Task :webview-ios:iosSimulatorArm64ApiBuild SKIPPED
+> Task :webview-ios:iosX64ProcessResources NO-SOURCE
+> Task :webview-ios:iosX64MainKlibrary UP-TO-DATE
+> Task :webview-ios:iosX64ApiBuild SKIPPED
+> Task :webview-ios:klibApiMerge SKIPPED
+> Task :webview-ios:klibApiCheck SKIPPED
+> Task :webview-ios:apiCheck UP-TO-DATE
+> Task :webview-android:mergeReleaseJniLibFolders UP-TO-DATE
+> Task :webview-android:mergeReleaseNativeLibs NO-SOURCE
+> Task :webview-android:stripReleaseDebugSymbols NO-SOURCE
+> Task :webview-android:copyReleaseJniLibsProjectAndLocalJars UP-TO-DATE
+> Task :webview-android:extractDeepLinksForAarRelease UP-TO-DATE
+> Task :webview-android:extractReleaseAnnotations UP-TO-DATE
+> Task :webview-android:mergeReleaseGeneratedProguardFiles UP-TO-DATE
+> Task :webview-android:mergeReleaseConsumerProguardFiles UP-TO-DATE
+> Task :webview-android:mergeReleaseShaders UP-TO-DATE
+> Task :webview-android:compileReleaseShaders NO-SOURCE
+> Task :webview-android:generateReleaseAssets UP-TO-DATE
+> Task :webview-android:packageReleaseAssets UP-TO-DATE
+> Task :webview-android:prepareLintJarForPublish UP-TO-DATE
+> Task :webview-android:prepareReleaseArtProfile UP-TO-DATE
+> Task :webview-android:processReleaseManifest UP-TO-DATE
+> Task :webview-android:processReleaseJavaRes UP-TO-DATE
+> Task :webview-android:mergeReleaseJavaResource UP-TO-DATE
+> Task :webview-android:syncReleaseLibJars UP-TO-DATE
+> Task :webview-android:writeReleaseAarMetadata UP-TO-DATE
+> Task :webview-android:bundleReleaseAar UP-TO-DATE
+> Task :webview-android:mapReleaseSourceSetPaths UP-TO-DATE
+> Task :webview-android:mergeReleaseResources UP-TO-DATE
+> Task :webview-api:compileReleaseLibraryResources UP-TO-DATE
+> Task :webview-extension-api:compileReleaseLibraryResources UP-TO-DATE
+> Task :webview-android:preDebugBuild UP-TO-DATE
+> Task :webview-android:generateDebugResValues UP-TO-DATE
+> Task :webview-android:generateDebugResources UP-TO-DATE
+> Task :webview-android:packageDebugResources UP-TO-DATE
+> Task :webview-android:parseDebugLocalResources UP-TO-DATE
+> Task :webview-android:generateDebugRFile UP-TO-DATE
+> Task :webview-api:preDebugBuild UP-TO-DATE
+> Task :webview-api:generateDebugResValues UP-TO-DATE
+> Task :webview-api:generateDebugResources UP-TO-DATE
+> Task :webview-api:packageDebugResources UP-TO-DATE
+> Task :webview-api:parseDebugLocalResources UP-TO-DATE
+> Task :webview-api:generateDebugRFile UP-TO-DATE
+> Task :webview-api:compileDebugKotlinAndroid UP-TO-DATE
+> Task :webview-api:javaPreCompileDebug UP-TO-DATE
+> Task :webview-api:compileDebugJavaWithJavac NO-SOURCE
+> Task :webview-api:bundleLibCompileToJarDebug UP-TO-DATE
+> Task :webview-extension-api:preDebugBuild UP-TO-DATE
+> Task :webview-extension-api:generateDebugResValues UP-TO-DATE
+> Task :webview-extension-api:generateDebugResources UP-TO-DATE
+> Task :webview-extension-api:packageDebugResources UP-TO-DATE
+> Task :webview-extension-api:parseDebugLocalResources UP-TO-DATE
+> Task :webview-extension-api:generateDebugRFile UP-TO-DATE
+> Task :webview-extension-api:compileDebugKotlinAndroid UP-TO-DATE
+> Task :webview-extension-api:javaPreCompileDebug UP-TO-DATE
+> Task :webview-extension-api:compileDebugJavaWithJavac NO-SOURCE
+> Task :webview-extension-api:bundleLibCompileToJarDebug UP-TO-DATE
+> Task :webview-android:compileDebugKotlin UP-TO-DATE
+> Task :webview-android:javaPreCompileDebug UP-TO-DATE
+> Task :webview-android:compileDebugJavaWithJavac NO-SOURCE
+> Task :webview-android:bundleLibCompileToJarDebug UP-TO-DATE
+> Task :webview-android:preDebugAndroidTestBuild UP-TO-DATE
+> Task :webview-android:writeDebugAarMetadata UP-TO-DATE
+> Task :webview-api:writeDebugAarMetadata UP-TO-DATE
+> Task :webview-extension-api:writeDebugAarMetadata UP-TO-DATE
+> Task :webview-android:checkDebugAndroidTestAarMetadata UP-TO-DATE
+> Task :webview-android:compileDebugLibraryResources UP-TO-DATE
+> Task :webview-android:generateDebugAndroidTestResValues UP-TO-DATE
+> Task :webview-android:mapDebugAndroidTestSourceSetPaths UP-TO-DATE
+> Task :webview-android:generateDebugAndroidTestResources UP-TO-DATE
+> Task :webview-android:mergeDebugAndroidTestResources UP-TO-DATE
+> Task :webview-android:extractDeepLinksDebug UP-TO-DATE
+> Task :webview-android:processDebugManifest UP-TO-DATE
+> Task :webview-api:extractDeepLinksDebug UP-TO-DATE
+> Task :webview-api:processDebugManifest UP-TO-DATE
+> Task :webview-extension-api:extractDeepLinksDebug UP-TO-DATE
+> Task :webview-extension-api:processDebugManifest UP-TO-DATE
+> Task :webview-android:processDebugAndroidTestManifest UP-TO-DATE
+> Task :webview-api:compileDebugLibraryResources UP-TO-DATE
+> Task :webview-extension-api:compileDebugLibraryResources UP-TO-DATE
+> Task :webview-android:processDebugAndroidTestResources UP-TO-DATE
+> Task :webview-android:verifyReleaseResources
+> Task :webview-android:assembleRelease
+> Task :webview-android:compileDebugAndroidTestKotlin
+
+BUILD SUCCESSFUL in 4s
+191 actionable tasks: 14 executed, 177 up-to-date

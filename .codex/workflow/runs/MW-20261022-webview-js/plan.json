@@ -1,0 +1,57 @@
+{
+  "schemaVersion": 1,
+  "taskId": "MW-20261022-webview-js",
+  "baselineSha": "849bd8c18632fe42766d9735ad23c816e2d02694",
+  "mode": "FULL",
+  "tasks": [
+    {
+      "id": "plan",
+      "owner": "PLANNER",
+      "dependsOn": []
+    },
+    {
+      "id": "red-green",
+      "owner": "IMPLEMENTER",
+      "dependsOn": [
+        "plan"
+      ]
+    },
+    {
+      "id": "integrate",
+      "owner": "INTEGRATOR",
+      "dependsOn": [
+        "red-green"
+      ]
+    },
+    {
+      "id": "fixed-sha-review",
+      "owner": "VERIFY_REVIEWER",
+      "dependsOn": [
+        "integrate"
+      ]
+    },
+    {
+      "id": "release-0.2.12",
+      "owner": "SUPERVISOR",
+      "dependsOn": [
+        "fixed-sha-review"
+      ]
+    },
+    {
+      "id": "cyxbs-dependency-update",
+      "owner": "SUPERVISOR",
+      "dependsOn": [
+        "release-0.2.12"
+      ]
+    }
+  ],
+  "acceptanceCriteria": [
+    "无注入零检测",
+    "能力缺失安全降级不抛",
+    "来源及幂等安全",
+    "真实install红绿及WebView测试",
+    "API不变",
+    "Central发布0.2.12",
+    "掌邮公开依赖Android编译"
+  ]
+}
