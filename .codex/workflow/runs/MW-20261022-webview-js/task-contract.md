@@ -15,7 +15,13 @@ Integrator仅将Supervisor转交的授权diff机械应用到专用集成worktree
 ## 验证
 先补真实install失败测试记录红测，再修复并跑绿测。通过internal capability checker强制缺失能力；不得只测布尔函数。覆盖：无bridge/JS禁用零查询；无facade不查document-start；消息通道缺失不抛且浏览正常；document-start缺失时真实WebView桥往返；精确host/HTTPS默认端口、Unsafe HTTP(S)、iframe/file/data拒绝；实际location与回调不同；导航/重载/重复回调不破坏pending Promise；现有document-start回归。
 命令：./gradlew :webview-android:testDebugUnitTest --no-configuration-cache；./gradlew :webview-android:connectedDebugAndroidTest --no-configuration-cache；./gradlew apiCheck :webview-android:assembleRelease :webview-android:compileDebugAndroidTestKotlin --no-configuration-cache；git diff --check。Reviewer重复最小unit、instrumentation、apiCheck/assemble。每阶段最多两次。
-公共API：不受影响；验证证据apiCheck。Android：受影响；unit、真实WebView instrumentation、assemble。iOS/Desktop/JS/Wasm：不受影响；无产品源码/target/契约更改，发布CI编译制品。P2：早期JS调用不能保证，仅尽力兼容，交付需说明。
+公共 API：不受影响；验证证据：apiCheck 退出 0。
+Android：受影响；验证证据：unit 23/23、instrumentation 18/18、assembleRelease 和 compileDebugAndroidTestKotlin 均通过。
+iOS：不受影响；验证证据：未修改 iOS 源码，发布工作流目标保持不变。
+Desktop：不受影响；验证证据：未修改 Desktop 源码，既有 desktop check 目标保持不变。
+JS/Wasm：不受影响；验证证据：未修改 JS/Wasm 源码，既有发布构建目标保持不变。
+安全默认值影响：不放宽来源、消息通道或 JavaScript 接口权限。
+P2：旧内核延后注入不保证首段脚本时序，已在文档与审查报告记录。
 
 ## 发布与接入
 用户已授权升级发布。沿既有main合并/校验后v0.2.12标签工作流发布，不绕门禁，不手改CI。VERSION_NAME保留0.2.12-SNAPSHOT，tag派生正式版本。确认Central实际上传非跳过且公开POM/module与Android制品可读取。再将掌邮multiweb升级0.2.12，以公开远程仓库解析编译Android base/app，不能只用mavenLocal证明完成。自动推进下一开发版本由现有CI处理。
